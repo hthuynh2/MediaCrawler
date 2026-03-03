@@ -24,6 +24,7 @@ import sys
 from typing import Optional
 
 from playwright.async_api import BrowserContext, Page
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from tenacity import (RetryError, retry, retry_if_result, stop_after_attempt,
                       wait_fixed)
@@ -71,8 +72,21 @@ class DouYinLogin(AbstractLogin):
 
         # If the page redirects to the slider verification page, need to slide again
         await asyncio.sleep(6)
-        current_page_title = await self.context_page.title()
-        if "验证码中间页" in current_page_title:
+        current_page_title = ""
+        try:
+            # Wait for load to avoid "Execution context was destroyed" during navigation
+            try:
+                await self.context_page.wait_for_load_state("domcontentloaded", timeout=10000)
+            except PlaywrightTimeoutError:
+                pass  # use current state
+            current_page_title = await self.context_page.title()
+        except PlaywrightError as e:
+            # Page/browser closed (e.g. user interrupt) or context destroyed during navigation
+            if "destroyed" in str(e).lower() or "closed" in str(e).lower() or "target" in str(e).lower():
+                utils.logger.warning("[DouYinLogin.begin] Could not get page title (page may have navigated or browser closed), skipping slider check")
+            else:
+                raise
+        if current_page_title and "验证码中间页" in current_page_title:
             await self.check_page_display_slider(move_step=3, slider_level="hard")
 
         # check login state
