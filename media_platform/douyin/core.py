@@ -91,28 +91,46 @@ class DouYinCrawler(AbstractCrawler):
             await self.context_page.goto(self.index_url)
 
             self.dy_client = await self.create_douyin_client(httpx_proxy_format)
+            utils.logger.info("[DouYinCrawler.start] Douyin Crawler Start ...")
+
             if not await self.dy_client.pong(browser_context=self.browser_context):
-                login_obj = DouYinLogin(
-                    login_type=config.LOGIN_TYPE,
-                    login_phone="",  # you phone number
-                    browser_context=self.browser_context,
-                    context_page=self.context_page,
-                    cookie_str=config.COOKIES,
-                )
-                await login_obj.begin()
-                await self.dy_client.update_cookies(browser_context=self.browser_context)
+                await self._do_login()
+
             crawler_type_var.set(config.CRAWLER_TYPE)
-            if config.CRAWLER_TYPE == "search":
-                # Search for notes and retrieve their comment information.
-                await self.search()
-            elif config.CRAWLER_TYPE == "detail":
-                # Get the information and comments of the specified post
-                await self.get_specified_awemes()
-            elif config.CRAWLER_TYPE == "creator":
-                # Get the information and comments of the specified creator
-                await self.get_creators_and_videos()
+            try:
+                await self._run_crawler()
+            except DataFetchError as e:
+                if "account blocked" in str(e):
+                    utils.logger.warning(
+                        "[DouYinCrawler.start] Session expired (account blocked), re-logging in..."
+                    )
+                    await self._do_login()
+                    await self._run_crawler()
+                else:
+                    raise
 
             utils.logger.info("[DouYinCrawler.start] Douyin Crawler finished ...")
+
+    async def _do_login(self):
+        """Trigger the login flow and update cookies."""
+        login_obj = DouYinLogin(
+            login_type=config.LOGIN_TYPE,
+            login_phone="",  # your phone number
+            browser_context=self.browser_context,
+            context_page=self.context_page,
+            cookie_str=config.COOKIES,
+        )
+        await login_obj.begin()
+        await self.dy_client.update_cookies(browser_context=self.browser_context)
+
+    async def _run_crawler(self):
+        """Dispatch to the appropriate crawler based on config.CRAWLER_TYPE."""
+        if config.CRAWLER_TYPE == "search":
+            await self.search()
+        elif config.CRAWLER_TYPE == "detail":
+            await self.get_specified_awemes()
+        elif config.CRAWLER_TYPE == "creator":
+            await self.get_creators_and_videos()
 
     async def search(self) -> None:
         utils.logger.info("[DouYinCrawler.search] Begin search douyin keywords")
@@ -261,9 +279,12 @@ class DouYinCrawler(AbstractCrawler):
         """
         Get the information and videos of the specified creator from URLs or IDs
         """
-        utils.logger.info("[DouYinCrawler.get_creators_and_videos] Begin get douyin creators")
+        utils.logger.info("[DouYinCrawler.get_creators_and_videos] Begin get douyin creators!!!")
         utils.logger.info("[DouYinCrawler.get_creators_and_videos] Parsing creator URLs...")
 
+        only_fetch_post_metadata = config.ONLY_FETCH_POST_METADATA
+        max_num_posts = config.MAX_NUM_POSTS
+        min_create_time = config.MIN_CREATE_TIME
         for creator_url in config.DY_CREATOR_ID_LIST:
             try:
                 creator_info_parsed = parse_creator_info_from_url(creator_url)
@@ -278,10 +299,22 @@ class DouYinCrawler(AbstractCrawler):
                 await douyin_store.save_creator(user_id, creator=creator_info)
 
             # Get all video information of the creator
-            all_video_list = await self.dy_client.get_all_user_aweme_posts(sec_user_id=user_id, callback=self.fetch_creator_video_detail)
+            if only_fetch_post_metadata:
+                all_video_list = await self.dy_client.get_all_user_aweme_posts(sec_user_id=user_id, callback=self.update_douyin_store_batch, max_num_posts=max_num_posts, min_create_time=min_create_time)
+            else:
+                all_video_list = await self.dy_client.get_all_user_aweme_posts(sec_user_id=user_id, callback=self.fetch_creator_video_detail, max_num_posts=max_num_posts, min_create_time=min_create_time)
 
             video_ids = [video_item.get("aweme_id") for video_item in all_video_list]
-            await self.batch_get_note_comments(video_ids)
+            if not only_fetch_post_metadata:
+                await self.batch_get_note_comments(video_ids)
+
+    async def update_douyin_store_batch(self, aweme_list: List[Dict]):
+        """
+        Concurrently obtain the specified post list and save the data
+        """
+        for aweme_item in aweme_list:
+            if aweme_item is not None:
+                await douyin_store.update_douyin_aweme(aweme_item=aweme_item)
 
     async def fetch_creator_video_detail(self, video_list: List[Dict]):
         """
@@ -299,6 +332,8 @@ class DouYinCrawler(AbstractCrawler):
     async def create_douyin_client(self, httpx_proxy: Optional[str]) -> DouYinClient:
         """Create douyin client"""
         cookie_str, cookie_dict = utils.convert_cookies(await self.browser_context.cookies())  # type: ignore
+
+        utils.logger.info ("cookie_str: {}".format(cookie_str))
         douyin_client = DouYinClient(
             proxy=httpx_proxy,
             headers={
@@ -313,6 +348,7 @@ class DouYinCrawler(AbstractCrawler):
             cookie_dict=cookie_dict,
             proxy_ip_pool=self.ip_proxy_pool,  # Pass proxy pool for automatic refresh
         )
+        utils.logger.info ("douyin_client: {}".format(douyin_client))
         return douyin_client
 
     async def launch_browser(

@@ -317,19 +317,27 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
         }
         return await self.get(uri, params)
 
-    async def get_all_user_aweme_posts(self, sec_user_id: str, callback: Optional[Callable] = None):
+    async def get_all_user_aweme_posts(self, sec_user_id: str, callback: Optional[Callable] = None, max_num_posts=10000000, min_create_time=0):
         posts_has_more = 1
         max_cursor = ""
         result = []
+        encounter_old_post_count = 0
         while posts_has_more == 1:
             aweme_post_res = await self.get_user_aweme_posts(sec_user_id, max_cursor)
             posts_has_more = aweme_post_res.get("has_more", 0)
             max_cursor = aweme_post_res.get("max_cursor")
             aweme_list = aweme_post_res.get("aweme_list") if aweme_post_res.get("aweme_list") else []
+            
             utils.logger.info(f"[DouYinClient.get_all_user_aweme_posts] get sec_user_id:{sec_user_id} video len : {len(aweme_list)}")
             if callback:
                 await callback(aweme_list)
             result.extend(aweme_list)
+            if len([x for x in aweme_list if x["create_time"] > min_create_time]) == 0:
+                encounter_old_post_count += 1
+            else:
+                encounter_old_post_count = 0
+            if len(result) > max_num_posts or encounter_old_post_count > 2:
+                break
         return result
 
     async def get_aweme_media(self, url: str) -> Union[bytes, None]:

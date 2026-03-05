@@ -44,3 +44,10 @@ DY_CREATOR_ID_LIST = [
     "MS4wLjABAAAATJPY7LAlaa5X-c8uNdWkvz0jUGgpw4eeXIwu_8BhvqE"
     # ........................
 ]
+
+# Creator crawl: if True, only fetch post metadata; if False, fetch full details and run comment crawl per post
+ONLY_FETCH_POST_METADATA = True
+# Maximum number of posts to fetch per creator
+MAX_NUM_POSTS = 10000000
+# Only fetch posts with create_time >= MIN_CREATE_TIME (Unix timestamp)
+MIN_CREATE_TIME = 0

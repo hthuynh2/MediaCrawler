@@ -251,6 +251,31 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Basic Configuration",
             ),
         ] = "",
+        only_fetch_post_metadata: Annotated[
+            str,
+            typer.Option(
+                "--only_fetch_post_metadata",
+                help="[Douyin creator] If yes, only fetch post metadata; if no, fetch full details and comments per post (yes/true/t/y/1 or no/false/f/n/0)",
+                rich_help_panel="Creator Crawl (Douyin)",
+                show_default=True,
+            ),
+        ] = str(config.ONLY_FETCH_POST_METADATA),
+        max_num_posts: Annotated[
+            int,
+            typer.Option(
+                "--max_num_posts",
+                help="[Douyin creator] Maximum number of posts to fetch per creator",
+                rich_help_panel="Creator Crawl (Douyin)",
+            ),
+        ] = config.MAX_NUM_POSTS,
+        min_create_time: Annotated[
+            int,
+            typer.Option(
+                "--min_create_time",
+                help="[Douyin creator] Only fetch posts with create_time >= this (Unix timestamp, 0 = no filter)",
+                rich_help_panel="Creator Crawl (Douyin)",
+            ),
+        ] = config.MIN_CREATE_TIME,
         max_comments_count_singlenotes: Annotated[
             int,
             typer.Option(
@@ -307,6 +332,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         enable_sub_comment = _to_bool(get_sub_comment)
         enable_headless = _to_bool(headless)
         enable_ip_proxy_value = _to_bool(enable_ip_proxy)
+        only_fetch_post_metadata_value = _to_bool(only_fetch_post_metadata)
         init_db_value = init_db.value if init_db else None
 
         # Parse specified_id and creator_id into lists
@@ -331,6 +357,9 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.ENABLE_IP_PROXY = enable_ip_proxy_value
         config.IP_PROXY_POOL_COUNT = ip_proxy_pool_count
         config.IP_PROXY_PROVIDER_NAME = ip_proxy_provider_name
+        config.ONLY_FETCH_POST_METADATA = only_fetch_post_metadata_value
+        config.MAX_NUM_POSTS = max_num_posts
+        config.MIN_CREATE_TIME = min_create_time
 
         # Set platform-specific ID lists for detail/creator mode
         if specified_id_list:
