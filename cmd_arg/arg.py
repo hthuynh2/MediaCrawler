@@ -347,6 +347,24 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 show_default=True,
             ),
         ] = str(config.BILI_SEARCH_SORT_TYPE),
+        sort_type: Annotated[
+            str,
+            typer.Option(
+                "--sort_type",
+                help="sort type for xhs search",
+                rich_help_panel="Creator Crawl (XHS)",
+                show_default=True,
+            ),
+        ] = str(config.SORT_TYPE),
+        xhs_min_upvotes_search_filter: Annotated[
+            int,
+            typer.Option(
+                "--xhs_min_upvotes_search_filter",
+                help="min upvotes to filter the posts when searching xhs",
+                rich_help_panel="Creator Crawl (XHS)",
+                show_default=True,
+            ),
+        ] = str(config.XHS_MIN_UPVOTES_SEARCH_FILTER),
         task_id: Annotated[
             str,
             typer.Option(
@@ -441,6 +459,8 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.BILIBILI_SEARCH_END_TS = bilibili_search_end_ts
         config.BILI_SEARCH_MODE = bili_search_mode
         config.BILI_SEARCH_SORT_TYPE = bili_search_sort_type
+        config.SORT_TYPE = sort_type
+        config.XHS_MIN_UPVOTES_SEARCH_FILTER = xhs_min_upvotes_search_filter
 
         # override global config
         config.PLATFORM = platform.value

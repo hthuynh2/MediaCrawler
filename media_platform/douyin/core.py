@@ -33,8 +33,7 @@ from playwright.async_api import (
 
 import config
 from base.base_crawler import AbstractCrawler
-from customized_scripts.server_utils.server_report_utils import report_post_data_to_server, \
-    report_comments_data_to_server
+from customized_scripts.server_utils.server_report_utils import report_comments_data_to_server, report_dy_post_data_to_server
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import douyin as douyin_store
 from tools import utils
@@ -325,7 +324,7 @@ class DouYinCrawler(AbstractCrawler):
         Concurrently obtain the specified post list and save the data
         """
         if config.REPORT_TO_SERVER:
-            report_post_data_to_server(aweme_list, "douyin", task_id=config.TASK_ID)
+            report_dy_post_data_to_server(aweme_list, task_id=config.TASK_ID)
 
         for aweme_item in aweme_list:
             if aweme_item is not None:
@@ -340,7 +339,7 @@ class DouYinCrawler(AbstractCrawler):
 
         note_details = await asyncio.gather(*task_list)
         if config.REPORT_TO_SERVER:
-            report_post_data_to_server(note_details, "douyin", task_id=config.TASK_ID)
+            report_dy_post_data_to_server(note_details, task_id=config.TASK_ID)
 
         for aweme_item in note_details:
             if aweme_item is not None:

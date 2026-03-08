@@ -80,6 +80,27 @@ def report_bilibili_post_data_to_server(post_data, task_id=None):
     payload = {"post_data": cleaned_post_data, "platform": "bilibili", "task_id": task_id}
     return send_request_to_server("/api/sync_post_data", payload)
 
+def report_xhs_post_data_to_server(post_data, task_id=None):
+    cleaned_post_data = []
+    for post_info in post_data:
+        cleaned_info = {
+            "note_id": post_info["note_id"],
+            "type": post_info["type"],
+            "desc": post_info.get("desc", ""),
+            "title": post_info.get("display_title", post_info.get("title", "")),
+            "create_time": post_info.get("time"),
+            "last_update_time": post_info.get("last_update_time", -1),
+            "creator_id": post_info["user"]["user_id"],
+            "creator_nickname": post_info["user"].get("nickname", post_info["user"].get("nick_name","")),
+            "upvote_count": post_info["interact_info"]["liked_count"],
+            "platform": "xhs"
+        }
+        cleaned_post_data.append(cleaned_info)
+        print(cleaned_info)
+
+    payload = {"post_data": cleaned_post_data, "platform": "xhs", "task_id": task_id}
+    return send_request_to_server("/api/sync_post_data", payload)
+
 def report_post_data_to_server(post_data, platform, task_id=None):
     if platform == "douyin":
         return report_dy_post_data_to_server(post_data, task_id)

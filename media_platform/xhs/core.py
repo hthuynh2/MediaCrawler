@@ -34,6 +34,8 @@ from tenacity import RetryError
 
 import config
 from base.base_crawler import AbstractCrawler
+from customized_scripts.server_utils.server_report_utils import report_post_data_to_server, \
+    report_xhs_post_data_to_server
 from model.m_xiaohongshu import NoteUrlInfo, CreatorUrlInfo
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import xhs as xhs_store
@@ -154,6 +156,28 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     if not notes_res or not notes_res.get("has_more", False):
                         utils.logger.info("[XiaoHongShuCrawler.search] No more content!")
                         break
+
+                    notes_to_fetch_details = []
+                    for note in notes_res.get("items"):
+                        if "note_card" not in note:
+                            continue
+                        utils.logger.info(note.keys())
+                        utils.logger.info(note)
+                        note_card = note["note_card"]
+                        if len(note_card["interact_info"]["liked_count"].strip()) == 0:
+                            utils.logger.info(f"[XiaoHongShuCrawler.search] filter out low upvotes post: {note_card}")
+                            continue
+
+                        try:
+                            liked_count_num = int(note_card["interact_info"]["liked_count"])
+                            if liked_count_num >= config.XHS_MIN_UPVOTES_SEARCH_FILTER:
+                                notes_to_fetch_details.append(note)
+                            else:
+                                utils.logger.info(f"[XiaoHongShuCrawler.search] filter out low upvotes post: {note_card}")
+                        except Exception:
+                            notes_to_fetch_details.append(note)
+                    #==============
+
                     semaphore = asyncio.Semaphore(config.MAX_CONCURRENCY_NUM)
                     task_list = [
                         self.get_note_detail_async_task(
@@ -161,7 +185,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
                             xsec_source=post_item.get("xsec_source"),
                             xsec_token=post_item.get("xsec_token"),
                             semaphore=semaphore,
-                        ) for post_item in notes_res.get("items", {}) if post_item.get("model_type") not in ("rec_query", "hot_query")
+                        ) for post_item in notes_to_fetch_details if post_item.get("model_type") not in ("rec_query", "hot_query")
                     ]
                     note_details = await asyncio.gather(*task_list)
                     for note_detail in note_details:
@@ -306,6 +330,8 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
                 utils.logger.info(f"[get_note_detail_async_task] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching note {note_id}")
 
+                if config.REPORT_TO_SERVER:
+                    report_xhs_post_data_to_server([note_detail], task_id=config.TASK_ID)
                 return note_detail
 
             except NoteNotFoundError as ex:
