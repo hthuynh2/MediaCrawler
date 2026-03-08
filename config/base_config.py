@@ -88,6 +88,10 @@ CRAWLER_MAX_NOTES_COUNT = 15
 # Controlling the number of concurrent crawlers
 MAX_CONCURRENCY_NUM = 1
 
+TASK_ID = None
+
+REPORT_TO_SERVER = False
+
 # Whether to enable crawling media mode (including image or video resources), crawling media is not enabled by default
 ENABLE_GET_MEIDAS = False
 

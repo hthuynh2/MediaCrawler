@@ -33,6 +33,8 @@ from playwright.async_api import (
 
 import config
 from base.base_crawler import AbstractCrawler
+from customized_scripts.server_utils.server_report_utils import report_post_data_to_server, \
+    report_comments_data_to_server
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import douyin as douyin_store
 from tools import utils
@@ -88,7 +90,7 @@ class DouYinCrawler(AbstractCrawler):
                 await self.browser_context.add_init_script(path="libs/stealth.min.js")
 
             self.context_page = await self.browser_context.new_page()
-            await self.context_page.goto(self.index_url)
+            await self.context_page.goto(self.index_url, timeout=2*60000)
 
             self.dy_client = await self.create_douyin_client(httpx_proxy_format)
             utils.logger.info("[DouYinCrawler.start] Douyin Crawler Start ...")
@@ -255,6 +257,15 @@ class DouYinCrawler(AbstractCrawler):
         if len(task_list) > 0:
             await asyncio.wait(task_list)
 
+    async def comments_update_callback(self, aweme_id: str, comments: List[Dict]):
+        if config.REPORT_TO_SERVER:
+            for comment in comments:
+                if "aweme_id" not in comment:
+                    comment["aweme_id"] = aweme_id
+            report_comments_data_to_server(comments, "douyin", task_id=config.TASK_ID)
+
+        await douyin_store.batch_update_dy_aweme_comments(aweme_id, comments)
+
     async def get_comments(self, aweme_id: str, semaphore: asyncio.Semaphore) -> None:
         async with semaphore:
             try:
@@ -265,7 +276,7 @@ class DouYinCrawler(AbstractCrawler):
                     aweme_id=aweme_id,
                     crawl_interval=crawl_interval,
                     is_fetch_sub_comments=config.ENABLE_GET_SUB_COMMENTS,
-                    callback=douyin_store.batch_update_dy_aweme_comments,
+                    callback=self.comments_update_callback,
                     max_count=config.CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES,
                 )
                 # Sleep after fetching comments
@@ -312,6 +323,9 @@ class DouYinCrawler(AbstractCrawler):
         """
         Concurrently obtain the specified post list and save the data
         """
+        if config.REPORT_TO_SERVER:
+            report_post_data_to_server(aweme_list, "douyin", task_id=config.TASK_ID)
+
         for aweme_item in aweme_list:
             if aweme_item is not None:
                 await douyin_store.update_douyin_aweme(aweme_item=aweme_item)
@@ -324,6 +338,9 @@ class DouYinCrawler(AbstractCrawler):
         task_list = [self.get_aweme_detail(post_item.get("aweme_id"), semaphore) for post_item in video_list]
 
         note_details = await asyncio.gather(*task_list)
+        if config.REPORT_TO_SERVER:
+            report_post_data_to_server(note_details, "douyin", task_id=config.TASK_ID)
+
         for aweme_item in note_details:
             if aweme_item is not None:
                 await douyin_store.update_douyin_aweme(aweme_item=aweme_item)

@@ -276,6 +276,24 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Creator Crawl (Douyin)",
             ),
         ] = config.MIN_CREATE_TIME,
+        report_to_server: Annotated[
+            str,
+            typer.Option(
+                "--report_to_server",
+                help="[Douyin creator] If yes, it will report the data to the remote server, supports yes/true/t/y/1 or no/false/f/n/0",
+                rich_help_panel="Creator Crawl (Douyin)",
+                show_default=True,
+            ),
+        ] = str(config.REPORT_TO_SERVER),
+        task_id: Annotated[
+            str,
+            typer.Option(
+                "--task_id",
+                help="[Douyin creator] the task id of this crawling task (for the remote server to keep track)",
+                rich_help_panel="Creator Crawl (Douyin)",
+                show_default="",
+            ),
+        ] = str(config.TASK_ID),
         max_comments_count_singlenotes: Annotated[
             int,
             typer.Option(
@@ -333,6 +351,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         enable_headless = _to_bool(headless)
         enable_ip_proxy_value = _to_bool(enable_ip_proxy)
         only_fetch_post_metadata_value = _to_bool(only_fetch_post_metadata)
+        report_to_server_value = _to_bool(report_to_server)
         init_db_value = init_db.value if init_db else None
 
         # Parse specified_id and creator_id into lists
@@ -360,6 +379,8 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.ONLY_FETCH_POST_METADATA = only_fetch_post_metadata_value
         config.MAX_NUM_POSTS = max_num_posts
         config.MIN_CREATE_TIME = min_create_time
+        config.REPORT_TO_SERVER = report_to_server_value
+        config.TASK_ID = task_id
 
         # Set platform-specific ID lists for detail/creator mode
         if specified_id_list:
