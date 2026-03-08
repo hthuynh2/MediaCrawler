@@ -106,19 +106,3 @@ if __name__ == '__main__':
         # wait 5s before each tasks
         print("{}: Completed task with status {is_success}, wait for 10s before start next ask".format(int(time.time()),  is_success=is_success))
         time.sleep(10)
-    # params = {
-    #     "creator_id": "MS4wLjABAAAAAm9qIeDDdB0-uO4XMe4SsYnXNaOwKMPtRmmx3cqxFyE",
-    #     "max_num_posts": 20,
-    #     "min_create_time": 0
-    # }
-    # build_cmd_for_crawl_account(params)
-
-    #========
-    # params = {
-    #     "post_ids": [7602150766047939867],
-    #     "min_create_time": 0,
-    #     "task_type": "crawl_comments_specific_post",
-    #     "task_id": "123123123"
-    # }
-    # # cmd = build_cmd_for_comments_given_post(params)
-    # execute_dy_task(params)

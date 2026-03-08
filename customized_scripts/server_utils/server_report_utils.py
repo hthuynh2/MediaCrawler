@@ -56,8 +56,36 @@ def report_post_data_to_server(post_data, platform, task_id=None):
     payload = {"post_data": cleaned_post_data, "platform": platform, "task_id": task_id}
     return send_request_to_server("/api/sync_post_data", payload)
 
+def clean_comment_data_helper(comment_info):
+    clean_reply_comment = []
+    if comment_info.get("reply_comment", None):
+        for reply_info in comment_info.get("reply_comment", []):
+            cleaned_reply_info = clean_comment_data_helper(reply_info)
+            clean_reply_comment.append(cleaned_reply_info)
+
+    cleaned_info = {
+        "cid": comment_info["cid"],
+        "aweme_id": comment_info["aweme_id"],
+        "create_time": comment_info["create_time"],
+        "text": comment_info["text"],
+        "reply_id": comment_info["reply_id"],
+        "reply_to_reply_id": comment_info["reply_to_reply_id"],
+        "reply_comment": clean_reply_comment,
+        "digg_count": comment_info.get("digg_count", -1),
+        "reply_comment_total": comment_info.get("reply_comment_total", -1),
+        "sec_uid": comment_info["user"]["sec_uid"],
+        "user_nickname": comment_info["user"]["nickname"],
+    }
+
+    return cleaned_info
+
 def report_comments_data_to_server(comment_data, platform, task_id=None):
-    payload = {"comment_data": comment_data, "platform": platform, "task_id": task_id}
+    cleaned_comment_data = []
+    for comment_info in comment_data:
+        cleaned_info = clean_comment_data_helper(comment_info)
+        cleaned_comment_data.append(cleaned_info)
+
+    payload = {"comment_data": cleaned_comment_data, "platform": platform, "task_id": task_id}
     return send_request_to_server("/api/sync_comment_data", payload)
 
 def report_crawler_task_outcome(is_success, error, task_id=None):
