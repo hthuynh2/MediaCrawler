@@ -46,8 +46,13 @@ BILI_CREATOR_ID_LIST = [
 START_DAY = "2024-01-01"
 END_DAY = "2024-01-01"
 
+BILIBILI_SEARCH_START_TS = 0
+BILIBILI_SEARCH_END_TS = 0
+
 # Search mode
 BILI_SEARCH_MODE = "normal"
+
+BILI_SEARCH_SORT_TYPE = ""
 
 # Video definition (qn) configuration, common values:
 # 16=360p, 32=480p, 64=720p, 80=1080p, 112=1080p high bit rate, 116=1080p60, 120=4K

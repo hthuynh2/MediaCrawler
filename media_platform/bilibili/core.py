@@ -41,6 +41,7 @@ from playwright._impl._errors import TargetClosedError
 
 import config
 from base.base_crawler import AbstractCrawler
+from customized_scripts.server_utils.server_report_utils import report_bilibili_post_data_to_server
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import bilibili as bilibili_store
 from tools import utils
@@ -185,6 +186,7 @@ class BilibiliCrawler(AbstractCrawler):
         bili_limit_count = 20  # bilibili limit page fixed value
         if config.CRAWLER_MAX_NOTES_COUNT < bili_limit_count:
             config.CRAWLER_MAX_NOTES_COUNT = bili_limit_count
+
         start_page = config.START_PAGE  # start page number
         for keyword in config.KEYWORDS.split(","):
             source_keyword_var.set(keyword)
@@ -202,9 +204,9 @@ class BilibiliCrawler(AbstractCrawler):
                     keyword=keyword,
                     page=page,
                     page_size=bili_limit_count,
-                    order=SearchOrderType.DEFAULT,
-                    pubtime_begin_s=0,  # Publish date start timestamp
-                    pubtime_end_s=0,  # Publish date end timestamp
+                    order=SearchOrderType(config.BILI_SEARCH_SORT_TYPE),
+                    pubtime_begin_s=config.BILIBILI_SEARCH_START_TS,  # Publish date start timestamp
+                    pubtime_end_s=config.BILIBILI_SEARCH_END_TS,  # Publish date end timestamp
                 )
                 video_list: List[Dict] = videos_res.get("result")
 
@@ -277,7 +279,7 @@ class BilibiliCrawler(AbstractCrawler):
                             keyword=keyword,
                             page=page,
                             page_size=bili_limit_count,
-                            order=SearchOrderType.DEFAULT,
+                            order=SearchOrderType(config.BILI_SEARCH_SORT_TYPE),
                             pubtime_begin_s=pubtime_begin_s,
                             pubtime_end_s=pubtime_end_s,
                         )
@@ -370,15 +372,28 @@ class BilibiliCrawler(AbstractCrawler):
         """
         ps = 30
         pn = 1
+        encounter_old_post_count = 0
         while True:
             result = await self.bili_client.get_creator_videos(creator_id, pn, ps)
             video_bvids_list = [video["bvid"] for video in result["list"]["vlist"]]
             await self.get_specified_videos(video_bvids_list)
             if int(result["page"]["count"]) <= pn * ps:
                 break
+
+            if pn * ps > config.MAX_NUM_POSTS:
+                break
+
+            if len([x for x in result["list"]["vlist"] if x["created"] > config.MIN_CREATE_TIME]) == 0:
+                encounter_old_post_count += 1
+            else:
+                encounter_old_post_count = 0
+
             await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
             utils.logger.info(f"[BilibiliCrawler.get_creator_videos] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after page {pn}")
             pn += 1
+
+            if encounter_old_post_count >= 2:
+                break
 
     async def get_specified_videos(self, video_url_list: List[str]):
         """
@@ -407,6 +422,7 @@ class BilibiliCrawler(AbstractCrawler):
                 video_aid: str = video_item_view.get("aid")
                 if video_aid:
                     video_aids_list.append(video_aid)
+
                 await bilibili_store.update_bilibili_video(video_detail)
                 await bilibili_store.update_up_info(video_detail)
                 await self.get_bilibili_video(video_detail, semaphore)
@@ -426,7 +442,9 @@ class BilibiliCrawler(AbstractCrawler):
 
                 # Sleep after fetching video details
                 await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
-                utils.logger.info(f"[BilibiliCrawler.get_video_info_task] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching video details {bvid or aid}")
+                if config.REPORT_TO_SERVER:
+                    report_bilibili_post_data_to_server([result["View"]], config.TASK_ID)
+                utils.logger.info(f"[BilibiliCrawler.get_video_info_task] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching video details {bvid or aid}: {result}")
 
                 return result
             except DataFetchError as ex:

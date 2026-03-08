@@ -311,6 +311,42 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 show_default=True,
             ),
         ] = str(config.DOUYIN_SEARCH_PUBLISH_TIME),
+        bilibili_search_start_ts: Annotated[
+            int,
+            typer.Option(
+                "--bilibili_search_start_ts",
+                help="start ts for bilibili search",
+                rich_help_panel="Creator Crawl (Bilibili)",
+                show_default=True,
+            ),
+        ] = config.BILIBILI_SEARCH_START_TS,
+        bilibili_search_end_ts: Annotated[
+            int,
+            typer.Option(
+                "--bilibili_search_end_ts",
+                help="end ts for bilibili search",
+                rich_help_panel="Creator Crawl (Bilibili)",
+                show_default=True,
+            ),
+        ] = config.BILIBILI_SEARCH_END_TS,
+        bili_search_mode: Annotated[
+            str,
+            typer.Option(
+                "--bili_search_mode",
+                help="search mode for bilibili search",
+                rich_help_panel="Creator Crawl (Bilibili)",
+                show_default=True,
+            ),
+        ] = str(config.BILI_SEARCH_MODE),
+        bili_search_sort_type: Annotated[
+            str,
+            typer.Option(
+                "--bili_search_sort_type",
+                help="sort type for bilibili search",
+                rich_help_panel="Creator Crawl (Bilibili)",
+                show_default=True,
+            ),
+        ] = str(config.BILI_SEARCH_SORT_TYPE),
         task_id: Annotated[
             str,
             typer.Option(
@@ -361,6 +397,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Proxy Configuration",
             ),
         ] = config.IP_PROXY_POOL_COUNT,
+
         ip_proxy_provider_name: Annotated[
             str,
             typer.Option(
@@ -369,6 +406,8 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Proxy Configuration",
             ),
         ] = config.IP_PROXY_PROVIDER_NAME,
+
+
     ) -> SimpleNamespace:
         """MediaCrawler 命令行入口"""
 
@@ -397,6 +436,11 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
             config.DOUYIN_SEARCH_PUBLISH_TIME = dy_search_publish_time
         else:
             config.DOUYIN_SEARCH_PUBLISH_TIME = 0
+
+        config.BILIBILI_SEARCH_START_TS = bilibili_search_start_ts
+        config.BILIBILI_SEARCH_END_TS = bilibili_search_end_ts
+        config.BILI_SEARCH_MODE = bili_search_mode
+        config.BILI_SEARCH_SORT_TYPE = bili_search_sort_type
 
         # override global config
         config.PLATFORM = platform.value
