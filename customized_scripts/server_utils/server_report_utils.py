@@ -142,8 +142,8 @@ def report_comments_data_to_server(comment_data, platform, task_id=None):
     if platform == "douyin":
         report_douyin_comments_data_to_server(comment_data, task_id)
 
-def report_crawler_task_outcome(is_success, error, task_id=None):
-    payload = {"is_success": is_success, "error": error, "task_id": task_id}
+def report_crawler_task_outcome(is_success, error, platform, task_id=None):
+    payload = {"is_success": is_success, "error": error, "platform": platform, "task_id": task_id}
     return send_request_to_server("/api/report_crawler_task_outcome", payload)
 
 def get_next_crawling_task(platform):

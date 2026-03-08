@@ -392,7 +392,7 @@ class BilibiliCrawler(AbstractCrawler):
             utils.logger.info(f"[BilibiliCrawler.get_creator_videos] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after page {pn}")
             pn += 1
 
-            if encounter_old_post_count >= 2:
+            if encounter_old_post_count >= 1:
                 break
 
     async def get_specified_videos(self, video_url_list: List[str]):

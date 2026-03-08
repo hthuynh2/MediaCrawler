@@ -110,7 +110,7 @@ def execute_task(params):
     error = ""
     if not is_success:
         error = log_output
-    report_crawler_task_outcome(is_success, error, task_id)
+    report_crawler_task_outcome(is_success, error, "bilibili", task_id)
 
     #=================================
     print("Done")
