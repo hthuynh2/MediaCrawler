@@ -43,7 +43,7 @@ from var import crawler_type_var, source_keyword_var
 
 from .client import DouYinClient
 from .exception import DataFetchError
-from .field import PublishTimeType
+from .field import PublishTimeType, SearchSortType
 from .help import parse_video_info_from_url, parse_creator_info_from_url
 from .login import DouYinLogin
 
@@ -156,8 +156,9 @@ class DouYinCrawler(AbstractCrawler):
                     posts_res = await self.dy_client.search_info_by_keyword(
                         keyword=keyword,
                         offset=page * dy_limit_count - dy_limit_count,
-                        publish_time=PublishTimeType(config.PUBLISH_TIME_TYPE),
-                        search_id=dy_search_id,
+                        publish_time=PublishTimeType(config.DOUYIN_SEARCH_PUBLISH_TIME),
+                        sort_type=SearchSortType(config.DOUYIN_SEARCH_SORT_TYPE),
+                        search_id=dy_search_id
                     )
                     if posts_res.get("data") is None or posts_res.get("data") == []:
                         utils.logger.info(f"[DouYinCrawler.search] search douyin keyword: {keyword}, page: {page} is empty,{posts_res.get('data')}`")
@@ -179,7 +180,7 @@ class DouYinCrawler(AbstractCrawler):
                         continue
                     aweme_list.append(aweme_info.get("aweme_id", ""))
                     page_aweme_list.append(aweme_info.get("aweme_id", ""))
-                    await douyin_store.update_douyin_aweme(aweme_item=aweme_info)
+                    await self.update_douyin_store_batch([aweme_info])
                     await self.get_aweme_media(aweme_item=aweme_info)
                 
                 # Batch get note comments for the current page

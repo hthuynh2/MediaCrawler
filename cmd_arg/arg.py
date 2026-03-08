@@ -276,6 +276,14 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Creator Crawl (Douyin)",
             ),
         ] = config.MIN_CREATE_TIME,
+        crawler_max_notes_count: Annotated[
+            int,
+            typer.Option(
+                "--crawler_max_notes_count",
+                help="Number of maximum notes to fetch per search",
+                rich_help_panel="Creator Crawl (Douyin)",
+            ),
+        ] = config.CRAWLER_MAX_NOTES_COUNT,
         report_to_server: Annotated[
             str,
             typer.Option(
@@ -285,6 +293,24 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 show_default=True,
             ),
         ] = str(config.REPORT_TO_SERVER),
+        dy_search_sort_type: Annotated[
+            str,
+            typer.Option(
+                "--dy_search_sort_type",
+                help="Sort type for douyin search",
+                rich_help_panel="Creator Crawl (Douyin)",
+                show_default=True,
+            ),
+        ] = str(config.DOUYIN_SEARCH_SORT_TYPE),
+        dy_search_publish_time: Annotated[
+            int,
+            typer.Option(
+                "--dy_search_publish_time",
+                help="Publish time limit for douyin search",
+                rich_help_panel="Creator Crawl (Douyin)",
+                show_default=True,
+            ),
+        ] = str(config.DOUYIN_SEARCH_PUBLISH_TIME),
         task_id: Annotated[
             str,
             typer.Option(
@@ -358,6 +384,20 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         specified_id_list = [id.strip() for id in specified_id.split(",") if id.strip()] if specified_id else []
         creator_id_list = [id.strip() for id in creator_id.split(",") if id.strip()] if creator_id else []
 
+        if dy_search_sort_type == "general":
+            config.DOUYIN_SEARCH_SORT_TYPE = 0
+        elif dy_search_sort_type == "latest":
+            config.DOUYIN_SEARCH_SORT_TYPE = 2
+        elif dy_search_sort_type == "most_like":
+            config.DOUYIN_SEARCH_SORT_TYPE = 1
+        else:
+            config.DOUYIN_SEARCH_SORT_TYPE = 0
+
+        if dy_search_publish_time:
+            config.DOUYIN_SEARCH_PUBLISH_TIME = dy_search_publish_time
+        else:
+            config.DOUYIN_SEARCH_PUBLISH_TIME = 0
+
         # override global config
         config.PLATFORM = platform.value
         config.LOGIN_TYPE = lt.value
@@ -381,6 +421,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.MIN_CREATE_TIME = min_create_time
         config.REPORT_TO_SERVER = report_to_server_value
         config.TASK_ID = task_id
+        config.CRAWLER_MAX_NOTES_COUNT = crawler_max_notes_count
 
         # Set platform-specific ID lists for detail/creator mode
         if specified_id_list:

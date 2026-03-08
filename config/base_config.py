@@ -90,6 +90,10 @@ MAX_CONCURRENCY_NUM = 1
 
 TASK_ID = None
 
+DOUYIN_SEARCH_SORT_TYPE = ""
+
+DOUYIN_SEARCH_PUBLISH_TIME = ""
+
 REPORT_TO_SERVER = False
 
 # Whether to enable crawling media mode (including image or video resources), crawling media is not enabled by default

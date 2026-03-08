@@ -23,10 +23,21 @@ def build_cmd_for_crawl_account_posts(params):
     return cmd
 
 def build_cmd_for_comments_given_post(params):
-    post_id = params['post_id']
+    post_ids = ",".join(params['post_ids'])
     task_id = params['task_id']
     save_data_path = TMP_DATA_DIR
-    cmd = f'''cd {PROJECT_DIR} && uv run python main.py --platform dy --lt qrcode --type detail --save_data_option json --specified_id {post_id} --get_comment true --get_sub_comment true --headless false  --save_data_path {save_data_path} --max_comments_count_singlenotes 10000 --report_to_server true --task_id {task_id}'''
+    cmd = f'''cd {PROJECT_DIR} && uv run python main.py --platform dy --lt qrcode --type detail --save_data_option json --specified_id {post_ids} --get_comment true --get_sub_comment true --headless false  --save_data_path {save_data_path} --max_comments_count_singlenotes 10000 --report_to_server true --task_id {task_id}'''
+    return cmd
+
+def build_cmd_for_search_keyword(params):
+    keywords = ",".join(params['keywords'])
+    task_id = params['task_id']
+    dy_search_sort_type = params['dy_search_sort_type'] # general, most_like, latest
+    dy_search_publish_time = params['dy_search_publish_time'] # 0, 1, 7, 180
+    save_data_path = TMP_DATA_DIR
+    crawler_max_notes_count = 10
+
+    cmd = f'''cd {PROJECT_DIR} && uv run python main.py --platform dy --lt qrcode --type search --save_data_option json --keywords {keywords} --crawler_max_notes_count {crawler_max_notes_count} --dy_search_sort_type {dy_search_sort_type} --dy_search_publish_time {dy_search_publish_time} --get_comment false --get_sub_comment false --headless false  --save_data_path {save_data_path} --report_to_server true --task_id {task_id}'''
     return cmd
 
 def execute_dy_task(params):
@@ -38,6 +49,8 @@ def execute_dy_task(params):
         cmd = build_cmd_for_crawl_account_posts(params)
     elif task_type == "crawl_comments_specific_post":
         cmd =  build_cmd_for_comments_given_post(params)
+    elif task_type == "search":
+        cmd =  build_cmd_for_search_keyword(params)
 
     if not cmd:
         print ("ERROR: failed to recognize task type {}".format(task_type))
