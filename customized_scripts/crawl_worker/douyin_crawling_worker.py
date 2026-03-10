@@ -66,7 +66,7 @@ def execute_dy_task(params):
             check=False,
             encoding='utf-8',
             errors='ignore',
-            timeout=600,  # 10 minutes
+            timeout=3600,  # 60 minutes
         )
         log_lines = []
         if result.stdout:
@@ -102,7 +102,7 @@ def execute_dy_task(params):
 
     #=================================
     print("Done")
-    print(log_output)
+    # print(log_output)
     return is_success
 
 if __name__ == '__main__':
@@ -117,8 +117,8 @@ if __name__ == '__main__':
 
         is_success = execute_dy_task(task_info)
         # wait 5s before each tasks
-        print("{}: Completed task with status {is_success}, wait for 10s before start next ask".format(int(time.time()),  is_success=is_success))
-        time.sleep(10)
+        print("{}: Completed task with status {is_success}, wait for 60s before start next ask".format(int(time.time()),  is_success=is_success))
+        time.sleep(60)
 
 
     # params = {
