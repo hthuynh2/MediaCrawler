@@ -23,7 +23,7 @@ def build_cmd_for_crawl_account_posts(params):
     min_create_time = params['min_create_time']
     print(main_filepath)
 
-    cmd = f'''cd {PROJECT_DIR} && uv run python main.py --platform bili --lt cookie --type creator --save_data_option json --creator_id {creator_id} --get_comment false --get_sub_comment false --cookies "{BILIBILI_COOKIES}" --headless false --save_data_path {save_data_path} --only_fetch_post_metadata true --max_num_posts {max_num_posts} --min_create_time {min_create_time} --report_to_server true  --task_id {task_id}'''
+    cmd = f'''cd {PROJECT_DIR} && uv run python main.py --platform bili --lt cookie --type creator --save_data_option json --creator_id {creator_id} --get_comment false --get_sub_comment false --cookies "{BILIBILI_COOKIES}" --headless true --save_data_path {save_data_path} --only_fetch_post_metadata true --max_num_posts {max_num_posts} --min_create_time {min_create_time} --report_to_server true  --task_id {task_id}'''
 
     return cmd
 
@@ -90,7 +90,7 @@ def execute_task(params):
 
         # if "comments have all been obtained and filtered" in log_output:
         #     is_success = True
-        if "Douyin Crawler finished" in log_output:
+        if "Bilibili Crawler finished" in log_output:
             is_success = True
     except subprocess.TimeoutExpired as e:
         log_output = (
@@ -113,8 +113,8 @@ def execute_task(params):
     report_crawler_task_outcome(is_success, error, "bilibili", task_id)
 
     #=================================
-    print("Done")
-    print(log_output)
+    print("At {}: Done for task {}; is_success: {};".format(int(time.time()), task_id, is_success))
+    # print(log_output)
     return is_success
 
 if __name__ == '__main__':
