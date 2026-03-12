@@ -23,19 +23,19 @@ def send_request_to_server(api_endpoint, payload):
     if SERVER_API_KEY:
         headers["Authorization"] = f"Bearer {SERVER_API_KEY}"
 
-    try:
-        resp = requests.post(
-            url,
-            json=payload,
-            headers=headers,
-            timeout=30,
-        )
-        resp.raise_for_status()
-        logger.debug("report_post_data_to_server success: %s %s", url, resp.status_code)
-        return resp.json()
-    except requests.RequestException as e:
-        logger.warning("report_post_data_to_server failed: %s", e)
-        return None
+    for retry_count in range(3):
+        try:
+            resp = requests.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=5*30,
+            )
+            resp.raise_for_status()
+            logger.debug("report_post_data_to_server success: %s %s", url, resp.status_code)
+            return resp.json()
+        except requests.RequestException as e:
+            logger.warning("report_post_data_to_server failed: %s", e)
 
 def report_dy_post_data_to_server(post_data, task_id=None):
     cleaned_post_data = []
