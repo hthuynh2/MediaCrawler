@@ -65,6 +65,7 @@ def report_dy_post_data_to_server(post_data, task_id=None):
             "collect_count": post_info["statistics"]["collect_count"],
             "creator_sec_uid": post_info["author"]["sec_uid"],
             "creator_nickname": post_info["author"]["nickname"],
+            "from_search_keyword": post_info.get("from_search_keyword", ""),
             "platform": "douyin"
         }
         cleaned_post_data.append(cleaned_info)

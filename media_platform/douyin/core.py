@@ -182,6 +182,7 @@ class DouYinCrawler(AbstractCrawler):
                         continue
                     aweme_list.append(aweme_info.get("aweme_id", ""))
                     page_aweme_list.append(aweme_info.get("aweme_id", ""))
+                    aweme_info["from_search_keyword"] = keyword
                     await self.update_douyin_store_batch([aweme_info])
                     await self.get_aweme_media(aweme_item=aweme_info)
                 
