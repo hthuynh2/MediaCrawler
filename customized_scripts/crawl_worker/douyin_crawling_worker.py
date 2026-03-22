@@ -127,8 +127,11 @@ if __name__ == '__main__':
 
         is_success = execute_dy_task(task_info)
         # wait 5s before each tasks
-        print("{}: Completed task with status {is_success}, wait for 60s before start next ask".format(int(time.time()),  is_success=is_success))
-        time.sleep(60)
+        wait_time = 60
+        if task_info["task_type"] == "search":
+            wait_time = 120
+        print("{}: Completed task with status {}, wait for {}s before start next ask".format(int(time.time()), is_success, wait_time))
+        time.sleep(wait_time)
 
 
     # params = {
