@@ -42,8 +42,8 @@ def build_cmd_for_search_keyword(params):
     task_id = params['task_id']
     dy_search_sort_type = params['search_sort_type'] # general, most_like, latest
     dy_search_publish_time = params['search_publish_time'] # 0, 1, 7, 180
+    crawler_max_notes_count = params.get("crawler_max_notes_count", 100)
     save_data_path = TMP_DATA_DIR
-    crawler_max_notes_count = 10
 
     cmd = f'''cd {PROJECT_DIR} && uv run python main.py --platform dy --lt qrcode --type search --save_data_option json --keywords {keywords} --crawler_max_notes_count {crawler_max_notes_count} --dy_search_sort_type {dy_search_sort_type} --dy_search_publish_time {dy_search_publish_time} --get_comment false --get_sub_comment false --headless false  --save_data_path {save_data_path} --report_to_server true --task_id {task_id}'''
     return cmd
