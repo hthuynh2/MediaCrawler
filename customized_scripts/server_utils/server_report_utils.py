@@ -37,6 +37,22 @@ def send_request_to_server(api_endpoint, payload):
         except requests.RequestException as e:
             logger.warning("report_post_data_to_server failed: %s", e)
 
+def report_dy_account_metadata_to_server(account_info, task_id=None):
+    cleaned_account_info = {
+        "sec_uid": account_info["user"]["sec_uid"],
+        "nickname": account_info["user"]["nickname"],
+        "signature": account_info["user"]["signature"],
+        "ip_location": account_info["user"].get("ip_location", ""),
+
+        "upvote_count": account_info["user"]["total_favorited"],
+        "follower_count": account_info["user"]["follower_count"],
+        "aweme_count": account_info["user"]["aweme_count"],
+    }
+
+    payload = {"account_info": cleaned_account_info, "platform": "douyin", "task_id": task_id}
+    return send_request_to_server("/api/sync_account_metadata", payload)
+
+
 def report_dy_post_data_to_server(post_data, task_id=None):
     cleaned_post_data = []
     for post_info in post_data:

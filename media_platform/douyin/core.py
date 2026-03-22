@@ -33,7 +33,8 @@ from playwright.async_api import (
 
 import config
 from base.base_crawler import AbstractCrawler
-from customized_scripts.server_utils.server_report_utils import report_comments_data_to_server, report_dy_post_data_to_server
+from customized_scripts.server_utils.server_report_utils import report_comments_data_to_server, \
+    report_dy_post_data_to_server, report_dy_account_metadata_to_server
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import douyin as douyin_store
 from tools import utils
@@ -130,6 +131,8 @@ class DouYinCrawler(AbstractCrawler):
             await self.search()
         elif config.CRAWLER_TYPE == "detail":
             await self.get_specified_awemes()
+        elif config.CRAWLER_TYPE == "creator_metadata":
+            await self.get_creators_metadata()
         elif config.CRAWLER_TYPE == "creator":
             await self.get_creators_and_videos()
 
@@ -287,6 +290,25 @@ class DouYinCrawler(AbstractCrawler):
                 utils.logger.info(f"[DouYinCrawler.get_comments] aweme_id: {aweme_id} comments have all been obtained and filtered ...")
             except DataFetchError as e:
                 utils.logger.error(f"[DouYinCrawler.get_comments] aweme_id: {aweme_id} get comments failed, error: {e}")
+
+    async def get_creators_metadata(self) -> None:
+        """
+        Get the information and videos of the specified creator from URLs or IDs
+        """
+        utils.logger.info("[DouYinCrawler.get_creators_metadata] Begin get douyin creators!!!")
+        for creator_url in config.DY_CREATOR_ID_LIST:
+            try:
+                creator_info_parsed = parse_creator_info_from_url(creator_url)
+                user_id = creator_info_parsed.sec_user_id
+                utils.logger.info(f"[DouYinCrawler.get_creators_metadata] Parsed sec_user_id: {user_id} from {creator_url}")
+            except ValueError as e:
+                utils.logger.error(f"[DouYinCrawler.get_creators_metadata] Failed to parse creator URL: {e}")
+                continue
+            creator_info: Dict = await self.dy_client.get_user_info(user_id)
+            if creator_info:
+                if config.REPORT_TO_SERVER:
+                    report_dy_account_metadata_to_server(creator_info, task_id=config.TASK_ID)
+                await douyin_store.save_creator(user_id, creator=creator_info)
 
     async def get_creators_and_videos(self) -> None:
         """

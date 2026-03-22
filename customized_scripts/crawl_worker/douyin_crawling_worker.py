@@ -22,6 +22,14 @@ def build_cmd_for_crawl_account_posts(params):
 
     return cmd
 
+def build_cmd_for_crawl_account_metadata(params):
+    task_id = params['task_id']
+    save_data_path = TMP_DATA_DIR
+    creator_id = ",".join(params['creator_ids'])
+    cmd = f'''cd {PROJECT_DIR} && uv run python main.py --platform dy --lt qrcode --type creator_metadata --save_data_option json --creator_id {creator_id} --headless false --save_data_path {save_data_path} --report_to_server true  --task_id {task_id}'''
+
+    return cmd
+
 def build_cmd_for_comments_given_post(params):
     post_ids = ",".join(params['post_ids'])
     task_id = params['task_id']
@@ -47,6 +55,8 @@ def execute_dy_task(params):
     cmd = None
     if task_type == "crawl_account_posts":
         cmd = build_cmd_for_crawl_account_posts(params)
+    elif task_type == "crawl_account_metadata":
+        cmd = build_cmd_for_crawl_account_metadata(params)
     elif task_type == "crawl_comments_specific_post":
         cmd =  build_cmd_for_comments_given_post(params)
     elif task_type == "search":
@@ -137,13 +147,23 @@ if __name__ == '__main__':
     # }
     # # cmd = build_cmd_for_comments_given_post(params)
     # execute_dy_task(params)
-
     # params = {
-    #     "keywords": ["张宇1000题"],
-    #     "task_type": "search",
-    #     "task_id": "1",
-    #     "search_sort_type": "general",
-    #     "search_publish_time": 0
+    #     "task_id": "test_creator_metadata",
+    #     "creator_ids": [
+    #         "MS4wLjABAAAA6so2nqIyALknUhGMiMPB64ZyROQqdP9NfYzMCu2VRG3XEePSX3nulInehsSOCqtt",
+    #         "MS4wLjABAAAADF4-IXU8jZmuZSBeEw13MzdsQ5O1KwOjVjccIjIePhGVokQjRH6DZQuM3sNDwwBt"
+    #     ]
     # }
-    # # cmd = build_cmd_for_search_keyword(params)
+    # cmd = build_cmd_for_crawl_account_metadata(params)
+    # print (cmd)
+    # exit(0)
+    # params = {
+    #     "keywords": ["考研英语"],
+    #     "task_type": "search",
+    #     "task_id": "test_task",
+    #     "search_sort_type": "most_like",
+    #     "search_publish_time": 7
+    # }
+    # cmd = build_cmd_for_search_keyword(params)
+    # print (cmd)
     # execute_dy_task(params)

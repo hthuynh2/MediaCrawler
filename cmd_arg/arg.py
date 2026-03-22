@@ -62,6 +62,7 @@ class CrawlerTypeEnum(str, Enum):
     SEARCH = "search"
     DETAIL = "detail"
     CREATOR = "creator"
+    CREATOR_METADATA = "creator_metadata"
 
 
 class SaveDataOptionEnum(str, Enum):
