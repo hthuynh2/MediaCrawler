@@ -34,6 +34,8 @@ IP_PROXY_POOL_COUNT = 2
 # Proxy IP provider name
 IP_PROXY_PROVIDER_NAME = "kuaidaili"  # kuaidaili | wandouhttp
 
+MEDIA_DOWNLOAD_PROXY_HTTP=""
+
 # Setting to True will not open the browser (headless browser)
 # Setting False will open a browser
 # If Xiaohongshu keeps scanning the code to log in but fails, open the browser and manually pass the sliding verification code.
@@ -97,7 +99,7 @@ DOUYIN_SEARCH_PUBLISH_TIME = 0
 REPORT_TO_SERVER = False
 
 # Whether to enable crawling media mode (including image or video resources), crawling media is not enabled by default
-ENABLE_GET_MEIDAS = False
+ENABLE_GET_MEDIAS = False
 
 # Whether to enable comment crawling mode. Comment crawling is enabled by default.
 ENABLE_GET_COMMENTS = True

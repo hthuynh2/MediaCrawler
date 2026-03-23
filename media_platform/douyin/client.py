@@ -340,8 +340,13 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
                 break
         return result
 
-    async def get_aweme_media(self, url: str) -> Union[bytes, None]:
-        async with httpx.AsyncClient(proxy=self.proxy) as client:
+    async def get_aweme_media(self, url: str, proxy:str=None) -> Union[bytes, None]:
+        # If user specify proxy then use it directly
+        final_proxy = self.proxy
+        if proxy and len(proxy) > 0:
+            final_proxy = proxy
+        print ("get_aweme_media: Download with proxy {}".format(final_proxy))
+        async with httpx.AsyncClient(proxy=final_proxy) as client:
             try:
                 response = await client.request("GET", url, timeout=self.timeout, follow_redirects=True)
                 response.raise_for_status()

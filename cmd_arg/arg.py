@@ -183,6 +183,15 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Basic Configuration",
             ),
         ] = config.KEYWORDS,
+        get_media: Annotated[
+            str,
+            typer.Option(
+                "--get_media",
+                help="Whether to crawl first-level comments, supports yes/true/t/y/1 or no/false/f/n/0",
+                rich_help_panel="media download configuration",
+                show_default=True,
+            ),
+        ] = str(config.ENABLE_GET_MEDIAS),
         get_comment: Annotated[
             str,
             typer.Option(
@@ -425,11 +434,20 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Proxy Configuration",
             ),
         ] = config.IP_PROXY_PROVIDER_NAME,
+        media_download_proxy_http: Annotated[
+            str,
+            typer.Option(
+                "--media_download_proxy_http",
+                help="the proxy http url for download media",
+                rich_help_panel="Proxy Configuration",
+            ),
+        ] = config.MEDIA_DOWNLOAD_PROXY_HTTP,
 
 
     ) -> SimpleNamespace:
         """MediaCrawler 命令行入口"""
 
+        enable_get_media = _to_bool(get_media)
         enable_comment = _to_bool(get_comment)
         enable_sub_comment = _to_bool(get_sub_comment)
         enable_headless = _to_bool(headless)
@@ -469,6 +487,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.CRAWLER_TYPE = crawler_type.value
         config.START_PAGE = start
         config.KEYWORDS = keywords
+        config.ENABLE_GET_MEDIAS = enable_get_media
         config.ENABLE_GET_COMMENTS = enable_comment
         config.ENABLE_GET_SUB_COMMENTS = enable_sub_comment
         config.HEADLESS = enable_headless
@@ -487,6 +506,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.REPORT_TO_SERVER = report_to_server_value
         config.TASK_ID = task_id
         config.CRAWLER_MAX_NOTES_COUNT = crawler_max_notes_count
+        config.MEDIA_DOWNLOAD_PROXY_HTTP = media_download_proxy_http
 
         # Set platform-specific ID lists for detail/creator mode
         if specified_id_list:

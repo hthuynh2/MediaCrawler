@@ -479,7 +479,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
         utils.logger.info("[XiaoHongShuCrawler.close] Browser context closed ...")
 
     async def get_notice_media(self, note_detail: Dict):
-        if not config.ENABLE_GET_MEIDAS:
+        if not config.ENABLE_GEENABLE_GET_MEDIAST_MEIDAS:
             utils.logger.info(f"[XiaoHongShuCrawler.get_notice_media] Crawling image mode is not enabled")
             return
         await self.get_note_images(note_detail)
@@ -491,7 +491,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
         Args:
             note_item: Note item dictionary
         """
-        if not config.ENABLE_GET_MEIDAS:
+        if not config.ENABLE_GET_MEDIAS:
             return
         note_id = note_item.get("note_id")
         image_list: List[Dict] = note_item.get("image_list", [])
@@ -521,7 +521,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
         Args:
             note_item: Note item dictionary
         """
-        if not config.ENABLE_GET_MEIDAS:
+        if not config.ENABLE_GET_MEDIAS:
             return
         note_id = note_item.get("note_id")
 

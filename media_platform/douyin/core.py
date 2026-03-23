@@ -471,7 +471,7 @@ class DouYinCrawler(AbstractCrawler):
         Args:
             aweme_item (Dict): 抖音作品详情
         """
-        if not config.ENABLE_GET_MEIDAS:
+        if not config.ENABLE_GET_MEDIAS:
             utils.logger.info(f"[DouYinCrawler.get_aweme_media] Crawling image mode is not enabled")
             return
         # List of note urls. If it is a short video type, an empty list will be returned.
@@ -491,7 +491,7 @@ class DouYinCrawler(AbstractCrawler):
         Args:
             aweme_item (Dict): 抖音作品详情
         """
-        if not config.ENABLE_GET_MEIDAS:
+        if not config.ENABLE_GET_MEDIAS:
             return
         aweme_id = aweme_item.get("aweme_id")
         # List of note urls. If it is a short video type, an empty list will be returned.
@@ -503,7 +503,7 @@ class DouYinCrawler(AbstractCrawler):
         for url in note_download_url:
             if not url:
                 continue
-            content = await self.dy_client.get_aweme_media(url)
+            content = await self.dy_client.get_aweme_media(url, config.MEDIA_DOWNLOAD_PROXY_HTTP)
             await asyncio.sleep(random.random())
             if content is None:
                 continue
@@ -518,7 +518,7 @@ class DouYinCrawler(AbstractCrawler):
         Args:
             aweme_item (Dict): 抖音作品详情
         """
-        if not config.ENABLE_GET_MEIDAS:
+        if not config.ENABLE_GET_MEDIAS:
             return
         aweme_id = aweme_item.get("aweme_id")
 
@@ -527,7 +527,7 @@ class DouYinCrawler(AbstractCrawler):
 
         if not video_download_url:
             return
-        content = await self.dy_client.get_aweme_media(video_download_url)
+        content = await self.dy_client.get_aweme_media(video_download_url, config.MEDIA_DOWNLOAD_PROXY_HTTP)
         await asyncio.sleep(random.random())
         if content is None:
             return
