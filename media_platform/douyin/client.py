@@ -121,6 +121,7 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
         try:
             if response.text == "" or response.text == "blocked":
                 utils.logger.error(f"request params incrr, response.text: {response.text}")
+                utils.logger.error(f"account blocked: method: {method}, url: {url}")
                 raise Exception("account blocked")
             return response.json()
         except Exception as e:
@@ -312,8 +313,8 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
             "max_cursor": max_cursor,
             "locate_query": "false",
             "publish_video_strategy_type": 2,
-            'verifyFp': 'verify_ma3hrt8n_q2q2HyYA_uLyO_4N6D_BLvX_E2LgoGmkA1BU',
-            'fp': 'verify_ma3hrt8n_q2q2HyYA_uLyO_4N6D_BLvX_E2LgoGmkA1BU'
+            'verifyFp': 'verify_mn4qarnm_sCfhL8j9_BVGX_4lTE_9Nwf_CBVP2ctUEvpi',
+            'fp': 'verify_mn4qarnm_sCfhL8j9_BVGX_4lTE_9Nwf_CBVP2ctUEvpi'
         }
         return await self.get(uri, params)
 
