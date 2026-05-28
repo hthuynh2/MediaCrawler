@@ -38,7 +38,7 @@ def build_cmd_for_comments_given_post(params):
     post_ids = ",".join(params['post_ids'])
     task_id = params['task_id']
     save_data_path = TMP_DATA_DIR
-    cmd = f'''cd {PROJECT_DIR} && uv run python main.py --platform dy --lt qrcode --type detail --save_data_option json --specified_id {post_ids} --get_comment true --get_sub_comment true --headless false  --save_data_path {save_data_path} --max_comments_count_singlenotes 10000 --report_to_server true --task_id {task_id}'''
+    cmd = f'''cd {PROJECT_DIR} && uv run python main.py --platform dy --lt qrcode --type detail --save_data_option json --specified_id {post_ids} --get_comment true --get_sub_comment true --headless false  --save_data_path {save_data_path} --max_comments_count_singlenotes 1000 --report_to_server true --task_id {task_id}'''
     return cmd
 
 def build_cmd_for_download_media(params):
