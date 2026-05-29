@@ -66,6 +66,15 @@ ACCOUNT_PAGE_SLEEP_SEC = 1.5     # between space-list pages
 SEARCH_KEYWORD_SLEEP_SEC = 2.0   # between search keywords
 DETAIL_FETCH_SLEEP_MS = int(os.environ.get("BILI_DETAIL_SLEEP_MS") or 1000)  # between view fetches
 
+# Bilibili's space arc/search endpoint intermittently returns risk-control codes
+# (notably -412 "request was banned"); they clear on a fresh, slightly-delayed
+# retry — each crawl_account call opens a new browser context + fresh WBI keys,
+# so a retry is a genuinely new request. Non-listed codes fail fast.
+RETRYABLE_CODES = {-412, -799, -509}
+ACCOUNT_MAX_ATTEMPTS = int(os.environ.get("BILI_ACCOUNT_MAX_ATTEMPTS") or 4)
+SEARCH_MAX_ATTEMPTS = int(os.environ.get("BILI_SEARCH_MAX_ATTEMPTS") or 3)
+RETRY_BACKOFF_BASE_SEC = float(os.environ.get("BILI_RETRY_BACKOFF_SEC") or 4)
+
 
 # ----- normalization helpers -----
 # The server reporter (report_bilibili_post_data_to_server) reads a nested,
@@ -178,6 +187,52 @@ def _report_account_items(crawler: BilibiliCrawler, items: list, task_id) -> int
     return len(posts)
 
 
+# ----- transient-failure retry wrappers -----
+def _fetch_account_page(crawler: BilibiliCrawler, mid: int, pn: int, ps: int) -> dict:
+    """Fetch one space-list page, retrying transient risk-control codes (-412,
+    etc.) with exponential backoff. Returns the inner {list, page} dict. Each
+    attempt re-runs crawl_account (fresh context + fresh WBI keys)."""
+    last = None
+    for attempt in range(1, ACCOUNT_MAX_ATTEMPTS + 1):
+        resp = crawler.crawl_account({
+            "mid": mid, "pn": pn, "ps": ps, "tid": 0, "special_type": "",
+            "order": "pubdate", "index": 0, "keyword": "",
+            "order_avoided": "true", "platform": "web",
+        })
+        envelope = (resp or {}).get("data", {}) or {}
+        code = envelope.get("code")
+        if code == 0:
+            return envelope.get("data", {}) or {}
+        last = f"http={(resp or {}).get('status')} code={code} message={envelope.get('message')!r}"
+        if code is not None and code not in RETRYABLE_CODES:
+            break  # non-transient (bad mid, not found, ...) -> fail fast
+        if attempt < ACCOUNT_MAX_ATTEMPTS:
+            wait = RETRY_BACKOFF_BASE_SEC * (2 ** (attempt - 1))
+            print(f"[bilibili_worker] arc/search {last} — attempt {attempt}/{ACCOUNT_MAX_ATTEMPTS}, retrying in {wait:.0f}s")
+            time.sleep(wait)
+    raise RuntimeError(f"account api error after {ACCOUNT_MAX_ATTEMPTS} attempts: {last} (mid={mid}, pn={pn})")
+
+
+def _search_keyword(crawler: BilibiliCrawler, keyword: str, num_videos: int,
+                    date_range, order: str) -> dict:
+    """Run one keyword search, retrying transient failures (search SPA not
+    loading, risk-control, etc.) with exponential backoff."""
+    last_err = None
+    for attempt in range(1, SEARCH_MAX_ATTEMPTS + 1):
+        try:
+            return crawler.search_keywords(
+                keyword, num_videos=num_videos, date_range=date_range, order=order,
+            )
+        except Exception as e:
+            last_err = e
+            if attempt < SEARCH_MAX_ATTEMPTS:
+                wait = RETRY_BACKOFF_BASE_SEC * (2 ** (attempt - 1))
+                print(f"[bilibili_worker] search '{keyword}' failed ({type(e).__name__}: {e}) — "
+                      f"attempt {attempt}/{SEARCH_MAX_ATTEMPTS}, retrying in {wait:.0f}s")
+                time.sleep(wait)
+    raise last_err
+
+
 # ----- task handlers -----
 def execute_crawl_account(crawler: BilibiliCrawler, params: dict) -> int:
     """Crawl a creator's uploaded videos, newest first, honoring max_num_posts
@@ -191,18 +246,7 @@ def execute_crawl_account(crawler: BilibiliCrawler, params: dict) -> int:
     pn = 1
     reported = 0
     while True:
-        resp = crawler.crawl_account({
-            "mid": mid, "pn": pn, "ps": ps, "tid": 0, "special_type": "",
-            "order": "pubdate", "index": 0, "keyword": "",
-            "order_avoided": "true", "platform": "web",
-        })
-        envelope = (resp or {}).get("data", {}) or {}
-        if envelope.get("code") != 0:
-            raise RuntimeError(
-                f"account api error: code={envelope.get('code')} "
-                f"message={envelope.get('message')!r} (mid={mid}, pn={pn})"
-            )
-        inner = envelope.get("data", {}) or {}
+        inner = _fetch_account_page(crawler, mid, pn, ps)
         vlist = (inner.get("list", {}) or {}).get("vlist", []) or []
         total = int((inner.get("page", {}) or {}).get("count", 0) or 0)
         if not vlist:
@@ -243,12 +287,7 @@ def execute_search(crawler: BilibiliCrawler, params: dict) -> int:
         keyword = (keyword or "").strip()
         if not keyword:
             continue
-        resp = crawler.search_keywords(
-            keyword,
-            num_videos=SEARCH_MAX_VIDEOS,
-            date_range=date_range,
-            order=order,
-        )
+        resp = _search_keyword(crawler, keyword, SEARCH_MAX_VIDEOS, date_range, order)
         videos = (resp or {}).get("videos", []) or []
         posts = [_view_from_search(v) for v in videos if _is_real_video(v)]
         if posts:
