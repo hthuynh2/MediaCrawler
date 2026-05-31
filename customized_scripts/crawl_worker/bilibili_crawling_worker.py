@@ -290,6 +290,8 @@ def execute_search(crawler: BilibiliCrawler, params: dict) -> int:
         resp = _search_keyword(crawler, keyword, SEARCH_MAX_VIDEOS, date_range, order)
         videos = (resp or {}).get("videos", []) or []
         posts = [_view_from_search(v) for v in videos if _is_real_video(v)]
+        for p in posts:
+            p["from_search_keyword"] = keyword
         if posts:
             report_bilibili_post_data_to_server(posts, task_id)
             reported += len(posts)

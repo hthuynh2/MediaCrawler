@@ -89,6 +89,7 @@ def report_bilibili_post_data_to_server(post_data, task_id=None):
             "comment_count": post_info["stat"]["reply"],
             "view": post_info["stat"]["view"],
             "title": post_info["title"],
+            "from_search_keyword": post_info.get("from_search_keyword", ""),
             "platform": "bilibili"
         }
         cleaned_post_data.append(cleaned_info)
