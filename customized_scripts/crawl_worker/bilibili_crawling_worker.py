@@ -71,9 +71,9 @@ DETAIL_FETCH_SLEEP_MS = int(os.environ.get("BILI_DETAIL_SLEEP_MS") or 1000)  # b
 # retry — each crawl_account call opens a new browser context + fresh WBI keys,
 # so a retry is a genuinely new request. Non-listed codes fail fast.
 RETRYABLE_CODES = {-412, -799, -509}
-ACCOUNT_MAX_ATTEMPTS = int(os.environ.get("BILI_ACCOUNT_MAX_ATTEMPTS") or 4)
-SEARCH_MAX_ATTEMPTS = int(os.environ.get("BILI_SEARCH_MAX_ATTEMPTS") or 3)
-RETRY_BACKOFF_BASE_SEC = float(os.environ.get("BILI_RETRY_BACKOFF_SEC") or 4)
+ACCOUNT_MAX_ATTEMPTS = int(os.environ.get("BILI_ACCOUNT_MAX_ATTEMPTS") or 7)
+SEARCH_MAX_ATTEMPTS = int(os.environ.get("BILI_SEARCH_MAX_ATTEMPTS") or 7)
+RETRY_BACKOFF_BASE_SEC = float(os.environ.get("BILI_RETRY_BACKOFF_SEC") or 2)
 
 
 # ----- normalization helpers -----
@@ -344,5 +344,5 @@ if __name__ == '__main__':
 
         is_success = execute_task(task_info)
         # wait 10s before each tasks
-        print("{}: Completed task with status {is_success}, wait for 10s before start next ask".format(int(time.time()), is_success=is_success))
-        time.sleep(10)
+        print("{}: Completed task with status {is_success}, wait for 60s before start next ask".format(int(time.time()), is_success=is_success))
+        time.sleep(60)
