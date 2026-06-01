@@ -41,8 +41,11 @@ class BilibiliCrawler:
     # Full per-video detail; returns the nested "View" object (owner{}, stat{}).
     VIEW_API = "https://api.bilibili.com/x/web-interface/view"
 
-    # Real per-page size of the search "video" group.
-    PAGE_SIZE = 20
+    # Per-page size of the "video" tab (searchTypeResponse.pagesize). Bilibili
+    # uses 42-per-page for the video tab; the "all" tab's curated video group
+    # would be 20, but we read from searchTypeResponse since that's what the
+    # UI renders from and what honors the date filter strictly.
+    PAGE_SIZE = 42
 
     # Stop search after this many consecutive pages with no new in-range hits.
     EMPTY_STREAK_LIMIT = 3
@@ -102,16 +105,15 @@ class BilibiliCrawler:
 
     _EXTRACT_SEARCH_JS = r"""
     () => {
-        const sr = window.__pinia && window.__pinia.searchResponse;
-        if (!sr) return { error: 'searchResponse missing' };
-        const sar = sr.searchAllResponse || {};
-        const groups = Array.isArray(sar.result) ? sar.result : [];
-        const g = groups.find(x => x && x.result_type === 'video');
+        const str = window.__pinia
+            && window.__pinia.searchTypeResponse
+            && window.__pinia.searchTypeResponse.searchTypeResponse;
+        if (!str) return { error: 'searchTypeResponse missing' };
         return {
-            page: sar.page, pagesize: sar.pagesize,
-            numResults: sar.numResults, numPages: sar.numPages,
-            seid: sar.seid,
-            videos: (g && g.data) || [],
+            page: str.page, pagesize: str.pagesize,
+            numResults: str.numResults, numPages: str.numPages,
+            seid: str.seid,
+            videos: Array.isArray(str.result) ? str.result : [],
         };
     }
     """
@@ -350,7 +352,7 @@ class BilibiliCrawler:
                 page.goto(url, wait_until="domcontentloaded")
                 page.wait_for_function(
                     "() => window.__pinia"
-                    "?.searchResponse?.searchAllResponse?.result",
+                    "?.searchTypeResponse?.searchTypeResponse?.result",
                     timeout=20000,
                 )
                 data = page.evaluate(self._EXTRACT_SEARCH_JS)
