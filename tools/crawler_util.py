@@ -144,6 +144,28 @@ def convert_cookies(cookies: Optional[List[Cookie]]) -> Tuple[str, Dict]:
     return cookies_str, cookie_dict
 
 
+async def convert_browser_context_cookies(
+    browser_context,
+    urls: Optional[List[str]] = None,
+) -> Tuple[str, Dict]:
+    """Fetch cookies from a Playwright BrowserContext and merge them across the given URLs.
+
+    Playwright's BrowserContext.cookies(urls=[...]) returns cookies visible to *each* URL.
+    Querying per-URL and merging avoids missing cookies that are scoped to a specific
+    subdomain (e.g. live.douyin.com, creator.douyin.com).
+    """
+    merged: Dict[str, Dict] = {}
+    if urls:
+        for url in urls:
+            for cookie in await browser_context.cookies(urls=url):
+                merged[cookie.get("name")] = cookie
+    else:
+        for cookie in await browser_context.cookies():
+            merged[cookie.get("name")] = cookie
+    cookies = list(merged.values())
+    return convert_cookies(cookies)
+
+
 def convert_str_cookie_to_dict(cookie_str: str) -> Dict:
     cookie_dict: Dict[str, str] = dict()
     if not cookie_str:
