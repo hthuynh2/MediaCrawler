@@ -2,8 +2,18 @@
 BilibiliCrawler — a single-class Bilibili crawler.
 
 Two operations:
-    - crawl_account(params)   : list videos uploaded by a UP主 (mid)
-    - search_keywords(...)    : search videos by keyword, optional date filter
+    - crawl_account(params)   : list videos uploaded by a UP主 (mid) — anonymous
+    - search_keywords(...)    : search videos by keyword, optional date filter —
+                               runs logged-in so results are personalized to the
+                               account.
+
+Login (search only):
+    search_keywords injects identity cookies from a Chrome-exported JSON file
+    (default: bilibili_cookies.json next to this module, gitignored) so the
+    search session is your account. crawl_account / crawl_video_views stay
+    anonymous. If the cookie file is missing/expired/revoked, search raises
+    BilibiliAuthError (re-export the cookies to fix). Account crawls need no
+    cookie file.
 
 Usage:
     # One-off calls (browser auto-managed per call):
@@ -31,6 +41,21 @@ from typing import Any, Optional, Tuple
 
 from playwright.sync_api import sync_playwright, Browser
 
+# Login cookies live next to this module (gitignored). search_keywords reads them
+# so search is personalized to the account; account/detail crawls stay anonymous.
+_DEFAULT_COOKIES_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "bilibili_cookies.json"
+)
+
+
+class BilibiliAuthError(RuntimeError):
+    """Login cookies are missing, malformed, or the session is expired/invalid.
+
+    Raised only on the search path (which requires login). Not retryable — the
+    fix is to re-export bilibili_cookies.json, so callers should fail fast rather
+    than burn their retry budget.
+    """
+
 
 class BilibiliCrawler:
     # ----- Bilibili endpoints -----
@@ -56,6 +81,21 @@ class BilibiliCrawler:
         "Chrome/125.0.0.0 Safari/537.36"
     )
     DEFAULT_LOCALE = "zh-CN"
+
+    # Identity cookies injected into the search context. Deliberately excludes
+    # device/session cookies (buvid3/buvid4/b_lsid): those are left to regenerate
+    # fresh per context so the per-page "fresh context" pagination trick still
+    # makes each page look like an independent visit. SESSDATA+DedeUserID is what
+    # the server keys login (and thus personalized ranking) off of.
+    _LOGIN_COOKIE_NAMES = {
+        "SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid",
+    }
+
+    # Chrome-export sameSite values -> Playwright's accepted set. "unspecified"
+    # has no Playwright equivalent, so it is dropped (attribute simply omitted).
+    _SAMESITE_MAP = {
+        "no_restriction": "None", "lax": "Lax", "strict": "Strict",
+    }
 
     # WBI mixin permutation (stable for years).
     _MIXIN_TAB = [
@@ -127,6 +167,7 @@ class BilibiliCrawler:
         user_agent: Optional[str] = None,
         locale: Optional[str] = None,
         verbose: bool = True,
+        cookies_path: Optional[str] = None,
     ):
         self.proxy_cfg = self._resolve_proxy(proxy)
         self.headless = headless
@@ -135,6 +176,11 @@ class BilibiliCrawler:
         self.verbose = verbose
         self._pw = None
         self._browser: Optional[Browser] = None
+        # Login is needed only by search; cookies are loaded lazily on first use
+        # so account/detail crawls work fine without a cookie file present.
+        self._cookies_path = cookies_path or _DEFAULT_COOKIES_PATH
+        self._login_cookies: Optional[list] = None
+        self._login_verified = False
 
     def __enter__(self) -> "BilibiliCrawler":
         self._pw = sync_playwright().start()
@@ -233,8 +279,110 @@ class BilibiliCrawler:
             finally:
                 browser.close()
 
-    def _new_context(self, browser: Browser):
-        return browser.new_context(user_agent=self.user_agent, locale=self.locale)
+    def _new_context(self, browser: Browser, logged_in: bool = False):
+        ctx = browser.new_context(user_agent=self.user_agent, locale=self.locale)
+        if logged_in:
+            ctx.add_cookies(self._get_login_cookies())
+        return ctx
+
+    # ----- internal: login cookies -----
+
+    def _get_login_cookies(self) -> list:
+        """Load + convert the exported cookies once, caching the result.
+
+        Raises BilibiliAuthError if the file is missing/unreadable, lacks the
+        auth cookies, or SESSDATA's expiry is already past.
+        """
+        if self._login_cookies is not None:
+            return self._login_cookies
+
+        path = self._cookies_path
+        if not os.path.exists(path):
+            raise BilibiliAuthError(f"login cookie file not found: {path}")
+        try:
+            with open(path, encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            raise BilibiliAuthError(f"failed to read login cookies {path}: {e}")
+
+        cookies, sessdata_exp = self._convert_cookies(raw)
+        names = {c["name"] for c in cookies}
+        missing = {"SESSDATA", "DedeUserID"} - names
+        if missing:
+            raise BilibiliAuthError(
+                f"login cookies missing {sorted(missing)} in {path} — re-export"
+            )
+        if sessdata_exp is not None and sessdata_exp <= time.time():
+            raise BilibiliAuthError(
+                f"SESSDATA expired (exp={int(sessdata_exp)}, now={int(time.time())}) "
+                f"in {path} — re-export cookies"
+            )
+        self._login_cookies = cookies
+        return cookies
+
+    @classmethod
+    def _convert_cookies(cls, raw: list) -> Tuple[list, Optional[float]]:
+        """Chrome-export cookie objects -> Playwright add_cookies() dicts.
+
+        Keeps only the identity cookies, maps sameSite, and normalizes expires.
+        Returns (cookies, sessdata_expires_or_None).
+        """
+        out: list = []
+        sessdata_exp: Optional[float] = None
+        for c in raw:
+            name = c.get("name")
+            if name not in cls._LOGIN_COOKIE_NAMES:
+                continue
+            cookie: dict = {
+                "name": name,
+                "value": c.get("value", ""),
+                "domain": c.get("domain", ".bilibili.com"),
+                "path": c.get("path", "/"),
+            }
+            if c.get("secure"):
+                cookie["secure"] = True
+            if c.get("httpOnly"):
+                cookie["httpOnly"] = True
+            same_site = cls._SAMESITE_MAP.get(str(c.get("sameSite", "")).lower())
+            if same_site:
+                cookie["sameSite"] = same_site
+            exp = c.get("expires")
+            if isinstance(exp, (int, float)) and exp > 0:
+                cookie["expires"] = exp
+                if name == "SESSDATA":
+                    sessdata_exp = exp
+            out.append(cookie)
+        return out, sessdata_exp
+
+    def _assert_logged_in(self, browser: Browser) -> None:
+        """Verify the injected session is actually logged in (once per crawler).
+
+        Catches server-side invalidation that the static expiry check can't —
+        e.g. SESSDATA revoked early. Raises BilibiliAuthError if not logged in.
+        """
+        if self._login_verified:
+            return
+        ctx = self._new_context(browser, logged_in=True)
+        page = ctx.new_page()
+        try:
+            # "commit" (not "domcontentloaded"): we only need a www.bilibili.com
+            # document so the in-page fetch carries cookies — not the full, heavy
+            # homepage, which can stall for 30s+ in headless.
+            page.goto(self.HOME_URL, wait_until="commit", timeout=30000)
+            page.wait_for_timeout(800)
+            nav = page.evaluate(self._FETCH_IN_PAGE_JS, self.NAV_URL)
+        finally:
+            ctx.close()
+
+        envelope = nav.get("data") if isinstance(nav, dict) else None
+        info = envelope.get("data") if isinstance(envelope, dict) else None
+        if not (isinstance(info, dict) and info.get("isLogin")):
+            raise BilibiliAuthError(
+                "session not logged in (isLogin=false) — SESSDATA likely revoked "
+                f"or invalid in {self._cookies_path}; re-export cookies"
+            )
+        self._login_verified = True
+        self._log(f"logged in as uid={info.get('mid')} uname={info.get('uname')!r}")
 
     def _log_proxy(self):
         if self.verbose and self.proxy_cfg:
@@ -335,6 +483,9 @@ class BilibiliCrawler:
         save_to: Optional[str],
         order: str = "",
     ) -> dict:
+        # Search is personalized: require a valid login before paginating.
+        self._assert_logged_in(browser)
+
         all_videos: list = []
         seen: set = set()
         current = 1
@@ -345,8 +496,10 @@ class BilibiliCrawler:
         while True:
             url = self._build_search_url(keyword, current, date_range, order)
             # Fresh CONTEXT per iteration: Bilibili keys pagination off the
-            # session, so reusing cookies makes it resend page 1.
-            ctx = self._new_context(browser)
+            # session, so reusing cookies makes it resend page 1. Only the static
+            # identity cookies are re-injected (logged_in=True); device/session
+            # cookies still regenerate per context, preserving the trick.
+            ctx = self._new_context(browser, logged_in=True)
             page = ctx.new_page()
             try:
                 page.goto(url, wait_until="domcontentloaded")

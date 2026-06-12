@@ -31,7 +31,10 @@ import traceback
 
 from dotenv import load_dotenv
 
-from customized_scripts.customized_crawler.bilibili_crawler import BilibiliCrawler
+from customized_scripts.customized_crawler.bilibili_crawler import (
+    BilibiliCrawler,
+    BilibiliAuthError,
+)
 from customized_scripts.server_utils.server_report_utils import (
     get_next_crawling_task,
     report_bilibili_post_data_to_server,
@@ -58,7 +61,7 @@ BILI_HEADLESS = _env_bool("BILI_HEADLESS", False)
 # extra requests and report partial stats (like/favorite = 0) instead.
 FETCH_FULL_DETAIL = _env_bool("BILI_FETCH_FULL_DETAIL", True)
 
-SEARCH_MAX_VIDEOS = int(os.environ.get("BILI_SEARCH_MAX_VIDEOS") or 500)
+SEARCH_MAX_VIDEOS = int(os.environ.get("BILI_SEARCH_MAX_VIDEOS") or 1000)
 DEFAULT_MAX_NUM_POSTS = int(os.environ.get("BILI_MAX_NUM_POSTS") or 30)
 
 ACCOUNT_PAGE_SIZE = 30
@@ -223,6 +226,10 @@ def _search_keyword(crawler: BilibiliCrawler, keyword: str, num_videos: int,
             return crawler.search_keywords(
                 keyword, num_videos=num_videos, date_range=date_range, order=order,
             )
+        except BilibiliAuthError:
+            # Cookies missing/expired/revoked — retrying won't help. Fail fast so
+            # the task surfaces immediately (re-export bilibili_cookies.json).
+            raise
         except Exception as e:
             last_err = e
             if attempt < SEARCH_MAX_ATTEMPTS:

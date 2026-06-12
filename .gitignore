@@ -179,3 +179,7 @@ agent_zone
 debug_tools
 
 database/*.db
+
+# Exported login cookies (contain account session tokens — never commit)
+*_cookies.json
+bilibili_cookies.json
