@@ -38,6 +38,7 @@ from customized_scripts.customized_crawler.bilibili_crawler import (
 from customized_scripts.server_utils.server_report_utils import (
     get_next_crawling_task,
     report_bilibili_post_data_to_server,
+    report_bilibili_account_metadata_to_server,
     report_crawler_task_outcome,
 )
 
@@ -216,6 +217,26 @@ def _fetch_account_page(crawler: BilibiliCrawler, mid: int, pn: int, ps: int) ->
     raise RuntimeError(f"account api error after {ACCOUNT_MAX_ATTEMPTS} attempts: {last} (mid={mid}, pn={pn})")
 
 
+def _fetch_account_metadata(crawler: BilibiliCrawler, mid: int) -> dict:
+    """Fetch one account's metadata, retrying transient failures (risk control,
+    SPA hiccups) with exponential backoff. Auth errors (missing/expired cookies)
+    fail fast since retrying won't help."""
+    last_err = None
+    for attempt in range(1, SEARCH_MAX_ATTEMPTS + 1):
+        try:
+            return crawler.crawl_account_metadata(mid)
+        except BilibiliAuthError:
+            raise
+        except Exception as e:
+            last_err = e
+            if attempt < SEARCH_MAX_ATTEMPTS:
+                wait = RETRY_BACKOFF_BASE_SEC * (2 ** (attempt - 1))
+                print(f"[bilibili_worker] account metadata mid={mid} failed ({type(e).__name__}: {e}) — "
+                      f"attempt {attempt}/{SEARCH_MAX_ATTEMPTS}, retrying in {wait:.0f}s")
+                time.sleep(wait)
+    raise last_err
+
+
 def _search_keyword(crawler: BilibiliCrawler, keyword: str, num_videos: int,
                     date_range, order: str) -> dict:
     """Run one keyword search, retrying transient failures (search SPA not
@@ -277,6 +298,28 @@ def execute_crawl_account(crawler: BilibiliCrawler, params: dict) -> int:
     return reported
 
 
+def execute_crawl_account_metadata(crawler: BilibiliCrawler, params: dict) -> int:
+    """Crawl profile + aggregate stats for one or more creators (logged in) and
+    report each to the server, mirroring the Douyin creator_metadata flow."""
+    task_id = params["task_id"]
+    creator_ids = params.get("creator_ids") or params.get("creator_id") or []
+    if isinstance(creator_ids, str):
+        creator_ids = [creator_ids]
+
+    reported = 0
+    for cid in creator_ids:
+        mid = _to_mid(cid)
+        meta = _fetch_account_metadata(crawler, mid)
+        report_bilibili_account_metadata_to_server(meta, task_id)
+        reported += 1
+        print(f"[bilibili_worker] account metadata mid={mid}: name={meta.get('name')!r} "
+              f"followers={meta.get('follower')} videos={meta.get('video_count')} "
+              f"total_views={meta.get('total_view')} likes={meta.get('like_num')}")
+        time.sleep(ACCOUNT_PAGE_SLEEP_SEC)
+
+    return reported
+
+
 def execute_search(crawler: BilibiliCrawler, params: dict) -> int:
     """Search each keyword and report the matching videos."""
     task_id = params["task_id"]
@@ -320,6 +363,8 @@ def execute_task(params: dict) -> bool:
         with BilibiliCrawler(proxy=BILI_PROXY, headless=BILI_HEADLESS, verbose=True) as crawler:
             if task_type == "crawl_account_posts":
                 reported = execute_crawl_account(crawler, params)
+            elif task_type == "crawl_account_metadata":
+                reported = execute_crawl_account_metadata(crawler, params)
             elif task_type == "search":
                 reported = execute_search(crawler, params)
             else:

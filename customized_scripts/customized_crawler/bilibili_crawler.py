@@ -1,19 +1,20 @@
 """
 BilibiliCrawler — a single-class Bilibili crawler.
 
-Two operations:
-    - crawl_account(params)   : list videos uploaded by a UP主 (mid) — anonymous
-    - search_keywords(...)    : search videos by keyword, optional date filter —
-                               runs logged-in so results are personalized to the
-                               account.
+Operations:
+    - crawl_account(params)        : list videos uploaded by a UP主 (mid) — anonymous
+    - crawl_account_metadata(mid)  : a UP主's profile + aggregate stats — logged-in
+    - search_keywords(...)         : search videos by keyword, optional date filter —
+                                     runs logged-in so results are personalized to
+                                     the account.
 
-Login (search only):
-    search_keywords injects identity cookies from a Chrome-exported JSON file
-    (default: bilibili_cookies.json next to this module, gitignored) so the
-    search session is your account. crawl_account / crawl_video_views stay
-    anonymous. If the cookie file is missing/expired/revoked, search raises
-    BilibiliAuthError (re-export the cookies to fix). Account crawls need no
-    cookie file.
+Login (search + account metadata):
+    search_keywords and crawl_account_metadata inject identity cookies from a
+    Chrome-exported JSON file (default: bilibili_cookies.json next to this module,
+    gitignored) so the session is your account — search is personalized, and the
+    login-only metadata endpoints (upstat / acc-info) resolve cleanly. crawl_account
+    / crawl_video_views stay anonymous. If the cookie file is missing/expired/
+    revoked, the logged-in operations raise BilibiliAuthError (re-export to fix).
 
 Usage:
     # One-off calls (browser auto-managed per call):
@@ -65,6 +66,16 @@ class BilibiliCrawler:
     SEARCH_URL = "https://search.bilibili.com/all"
     # Full per-video detail; returns the nested "View" object (owner{}, stat{}).
     VIEW_API = "https://api.bilibili.com/x/web-interface/view"
+
+    # ----- account metadata endpoints -----
+    # card: profile + follower/following/video counts, no WBI signing, works even
+    #   anonymously — the robust primary source.
+    CARD_API = "https://api.bilibili.com/x/web-interface/card"
+    # acc/info: full profile (verification, live room, tags, top photo). WBI-signed;
+    #   logged-in requests bypass the w_webid risk-control token.
+    ACC_INFO_API = "https://api.bilibili.com/x/space/wbi/acc/info"
+    # upstat: aggregate totals (total plays, total likes). WBI-signed; needs login.
+    UPSTAT_API = "https://api.bilibili.com/x/space/upstat"
 
     # Per-page size of the "video" tab (searchTypeResponse.pagesize). Bilibili
     # uses 42-per-page for the video tab; the "all" tab's curated video group
@@ -265,6 +276,25 @@ class BilibiliCrawler:
             return {}
         return self._with_browser(
             lambda br: self._do_crawl_video_views(br, bvids, sleep_ms, save_to)
+        )
+
+    def crawl_account_metadata(self, mid: int, save_to: Optional[str] = None) -> dict:
+        """
+        Fetch an account's profile + aggregate stats, logged in.
+
+        Merges three endpoints (see CARD_API / ACC_INFO_API / UPSTAT_API):
+            - card     : name, sign, follower/following, video/article counts
+            - acc/info : verification (official), live room, top photo
+            - upstat   : total plays (archive.view) and total likes
+
+        Returns a normalized dict (see _merge_account_metadata). card is the
+        success signal: if it fails (risk control / bad mid) a retryable
+        RuntimeError is raised; acc/info and upstat are best-effort. Raises
+        BilibiliAuthError if the session is not logged in.
+        """
+        self._log_proxy()
+        return self._with_browser(
+            lambda br: self._do_crawl_account_metadata(br, mid, save_to)
         )
 
     # ----- internal: browser lifecycle helper -----
@@ -471,6 +501,131 @@ class BilibiliCrawler:
                 json.dump(out, f, indent=2, ensure_ascii=False)
             self._log(f"saved {len(out)} views -> {save_to}")
         return out
+
+    # ----- internal: account metadata -----
+
+    def _do_crawl_account_metadata(
+        self, browser: Browser, mid: int, save_to: Optional[str]
+    ) -> dict:
+        ctx = self._new_context(browser, logged_in=True)
+        page = ctx.new_page()
+        try:
+            # "commit" + in-page fetch: same trick as the login check — avoids the
+            # heavy homepage stalling while still landing on a bilibili origin.
+            page.goto(self.HOME_URL, wait_until="commit", timeout=30000)
+            page.wait_for_timeout(800)
+            nav = page.evaluate(self._FETCH_IN_PAGE_JS, self.NAV_URL)
+            navd = (nav.get("data") or {}).get("data") if isinstance(nav, dict) else None
+            if not (isinstance(navd, dict) and navd.get("isLogin")):
+                raise BilibiliAuthError(
+                    "session not logged in (isLogin=false) — SESSDATA likely "
+                    f"revoked or invalid in {self._cookies_path}; re-export cookies"
+                )
+            self._login_verified = True
+            wbi = navd["wbi_img"]
+            img_key, sub_key = self._extract_wbi_keys(wbi["img_url"], wbi["sub_url"])
+
+            card = page.evaluate(
+                self._FETCH_IN_PAGE_JS,
+                self.CARD_API + "?" + urllib.parse.urlencode({"mid": mid, "photo": "true"}),
+            )
+            acc = page.evaluate(
+                self._FETCH_IN_PAGE_JS,
+                self._signed_url(self.ACC_INFO_API, {"mid": mid}, img_key, sub_key),
+            )
+            up = page.evaluate(
+                self._FETCH_IN_PAGE_JS,
+                self._signed_url(self.UPSTAT_API, {"mid": mid}, img_key, sub_key),
+            )
+        finally:
+            ctx.close()
+
+        card_d = self._envelope_data(card)
+        if not card_d:
+            # card needs no signing and works anonymously, so an empty result here
+            # means risk control or a bad mid — let the caller retry.
+            raise RuntimeError(
+                f"account metadata fetch failed for mid={mid} "
+                f"(card code={self._envelope_code(card)})"
+            )
+        acc_d = self._envelope_data(acc)
+        up_d = self._envelope_data(up)
+        if not acc_d:
+            self._log(f"  (acc/info empty for mid={mid}: code={self._envelope_code(acc)})")
+        if not up_d:
+            self._log(f"  (upstat empty for mid={mid}: code={self._envelope_code(up)})")
+
+        result = self._merge_account_metadata(mid, card_d, acc_d, up_d)
+        if save_to:
+            with open(save_to, "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
+            self._log(f"saved metadata for mid={mid} -> {save_to}")
+        return result
+
+    def _signed_url(self, base: str, params: dict, img_key: str, sub_key: str) -> str:
+        signed = self._sign_wbi(params, img_key, sub_key)
+        return base + "?" + urllib.parse.urlencode(signed, safe="")
+
+    @staticmethod
+    def _envelope_data(res: Any) -> dict:
+        """Inner `data` of a Bilibili API envelope, or {} if the call failed.
+
+        _FETCH_IN_PAGE_JS returns {status, data: <envelope>}; the envelope is
+        {code, message, data}. Returns the envelope's data only when code == 0.
+        """
+        if not isinstance(res, dict):
+            return {}
+        env = res.get("data")
+        if isinstance(env, dict) and env.get("code") == 0 and isinstance(env.get("data"), dict):
+            return env["data"]
+        return {}
+
+    @staticmethod
+    def _envelope_code(res: Any) -> Optional[int]:
+        if not isinstance(res, dict):
+            return None
+        env = res.get("data")
+        return env.get("code") if isinstance(env, dict) else None
+
+    @staticmethod
+    def _merge_account_metadata(mid: int, card_d: dict, acc_d: dict, up_d: dict) -> dict:
+        """Merge card / acc-info / upstat into one normalized account record.
+
+        Prefers card (robust, unsigned) for profile + counts, upstat for the
+        aggregate totals, and acc/info for verification + live room.
+        """
+        card = card_d.get("card", {}) or {}
+        official = acc_d.get("official", {}) or {}
+        live = acc_d.get("live_room", {}) or {}
+        level = (card.get("level_info", {}) or {}).get("current_level")
+        if not level:
+            level = acc_d.get("level", 0)
+        archive = up_d.get("archive", {}) or {}
+        like_num = up_d.get("likes")
+        if like_num is None:
+            like_num = card_d.get("like_num", 0)
+        return {
+            "mid": mid,
+            "name": card.get("name") or acc_d.get("name", ""),
+            "sign": card.get("sign") or acc_d.get("sign", ""),
+            "sex": card.get("sex") or acc_d.get("sex", ""),
+            "face": card.get("face") or acc_d.get("face", ""),
+            "level": level or 0,
+            "official_type": official.get("type", card.get("official_verify", {}).get("type", -1)),
+            "official_title": official.get("title", card.get("official_verify", {}).get("desc", "")),
+            "follower": card_d.get("follower", 0),
+            # NB: card_d["following"] is a bool ("does the logged-in user follow
+            # them"); the following *count* is card.card.attention.
+            "following": card.get("attention", 0),
+            "video_count": card_d.get("archive_count", 0),
+            "article_count": card_d.get("article_count", 0),
+            "like_num": like_num or 0,
+            "total_view": archive.get("view", 0),
+            "article_view": (up_d.get("article", {}) or {}).get("view", 0),
+            "live_status": live.get("liveStatus", 0),
+            "live_url": live.get("url", ""),
+            "top_photo": acc_d.get("top_photo", ""),
+        }
 
     # ----- internal: search crawl -----
 

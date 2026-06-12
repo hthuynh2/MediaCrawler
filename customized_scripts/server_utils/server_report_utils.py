@@ -74,6 +74,25 @@ def report_dy_post_data_to_server(post_data, task_id=None):
     payload = {"post_data": cleaned_post_data, "platform": "douyin", "task_id": task_id}
     return send_request_to_server("/api/sync_post_data", payload)
 
+def report_bilibili_account_metadata_to_server(account_info, task_id=None):
+    # account_info is the normalized dict from
+    # BilibiliCrawler.crawl_account_metadata (merged card / acc-info / upstat).
+    cleaned_account_info = {
+        "creator_id": account_info["mid"],
+        "nickname": account_info.get("name", ""),
+        "signature": account_info.get("sign", ""),
+
+        "upvote_count": account_info.get("like_num", 0),      # total likes received
+        "follower_count": account_info.get("follower", 0),
+        "following_count": account_info.get("following", 0),
+        "video_count": account_info.get("video_count", 0),    # number of videos posted
+        "view_count": account_info.get("total_view", 0),      # total plays across videos
+    }
+
+    payload = {"account_info": cleaned_account_info, "platform": "bilibili", "task_id": task_id}
+    return send_request_to_server("/api/sync_account_metadata", payload)
+
+
 def report_bilibili_post_data_to_server(post_data, task_id=None):
     cleaned_post_data = []
     for post_info in post_data:
