@@ -65,6 +65,11 @@ FETCH_FULL_DETAIL = _env_bool("BILI_FETCH_FULL_DETAIL", True)
 SEARCH_MAX_VIDEOS = int(os.environ.get("BILI_SEARCH_MAX_VIDEOS") or 1000)
 DEFAULT_MAX_NUM_POSTS = int(os.environ.get("BILI_MAX_NUM_POSTS") or 30)
 
+# Search-only: skip videos longer than this. Long search hits tend to be
+# multi-hour course compilations ("我花3w买的高中数学课 高一到高三全集"), which
+# are usually off-target for a keyword search. 0 disables the filter.
+SEARCH_MAX_DURATION_SEC = int(os.environ.get("BILI_SEARCH_MAX_DURATION_SEC") or 45 * 60)
+
 ACCOUNT_PAGE_SIZE = 30
 ACCOUNT_PAGE_SLEEP_SEC = 1.5     # between space-list pages
 SEARCH_KEYWORD_SLEEP_SEC = 2.0   # between search keywords
@@ -340,12 +345,20 @@ def execute_search(crawler: BilibiliCrawler, params: dict) -> int:
         resp = _search_keyword(crawler, keyword, SEARCH_MAX_VIDEOS, date_range, order)
         videos = (resp or {}).get("videos", []) or []
         posts = [_view_from_search(v) for v in videos if _is_real_video(v)]
+        # Skip overly long videos (course compilations etc.). duration is in
+        # seconds; 0 means duration couldn't be parsed, so keep those.
+        skipped_long = 0
+        if SEARCH_MAX_DURATION_SEC > 0:
+            kept = [p for p in posts if p["duration"] <= SEARCH_MAX_DURATION_SEC]
+            skipped_long = len(posts) - len(kept)
+            posts = kept
         for p in posts:
             p["from_search_keyword"] = keyword
         if posts:
             report_bilibili_post_data_to_server(posts, task_id)
             reported += len(posts)
-        print(f"[bilibili_worker] search '{keyword}': reported {len(posts)} posts")
+        print(f"[bilibili_worker] search '{keyword}': reported {len(posts)} posts "
+              f"(skipped {skipped_long} >{SEARCH_MAX_DURATION_SEC // 60}min)")
         time.sleep(SEARCH_KEYWORD_SLEEP_SEC)
 
     return reported
