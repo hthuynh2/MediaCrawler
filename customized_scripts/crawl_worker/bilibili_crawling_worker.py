@@ -62,7 +62,7 @@ BILI_HEADLESS = _env_bool("BILI_HEADLESS", False)
 # extra requests and report partial stats (like/favorite = 0) instead.
 FETCH_FULL_DETAIL = _env_bool("BILI_FETCH_FULL_DETAIL", True)
 
-SEARCH_MAX_VIDEOS = int(os.environ.get("BILI_SEARCH_MAX_VIDEOS") or 1000)
+SEARCH_MAX_VIDEOS = int(os.environ.get("BILI_SEARCH_MAX_VIDEOS") or 36)
 DEFAULT_MAX_NUM_POSTS = int(os.environ.get("BILI_MAX_NUM_POSTS") or 30)
 
 # Search-only: skip videos longer than this. Long search hits tend to be
