@@ -20,6 +20,12 @@ Config (all env-overridable, sensible defaults):
   BILI_FETCH_FULL_DETAIL  account mode: fetch each video's full detail to fill in
                           like/favorite counts (default: true). Flip to false to
                           report partial stats (fewer requests, lower block risk).
+  BILI_ACCOUNT_POSTS_FETCH_METADATA
+                          crawl_account_posts: after reporting the posts, also
+                          crawl + report the account's metadata (default: true).
+                          This needs login cookies (the posts crawl does not), so
+                          a metadata failure is best-effort and never discards the
+                          already-reported posts. Set to false to skip it.
   BILI_SEARCH_MAX_VIDEOS  max videos to fetch per search keyword (default: 30)
 """
 
@@ -61,6 +67,12 @@ BILI_HEADLESS = _env_bool("BILI_HEADLESS", False)
 # stats (matching the old crawler). Set BILI_FETCH_FULL_DETAIL=false to skip the
 # extra requests and report partial stats (like/favorite = 0) instead.
 FETCH_FULL_DETAIL = _env_bool("BILI_FETCH_FULL_DETAIL", True)
+
+# crawl_account_posts: after the posts are reported, also crawl + report the
+# account's metadata (same path as the dedicated crawl_account_metadata task).
+# The posts crawl is cookie-less but metadata needs login, so this is best-effort
+# (a failure never discards the reported posts). Set false to skip the extra call.
+ACCOUNT_POSTS_FETCH_METADATA = _env_bool("BILI_ACCOUNT_POSTS_FETCH_METADATA", True)
 
 SEARCH_MAX_VIDEOS = int(os.environ.get("BILI_SEARCH_MAX_VIDEOS") or 36)
 DEFAULT_MAX_NUM_POSTS = int(os.environ.get("BILI_MAX_NUM_POSTS") or 30)
@@ -266,10 +278,24 @@ def _search_keyword(crawler: BilibiliCrawler, keyword: str, num_videos: int,
     raise last_err
 
 
+def _fetch_and_report_account_metadata(crawler: BilibiliCrawler, mid: int, task_id) -> dict:
+    """Fetch one account's metadata (logged in) and report it to the server.
+    Shared by the crawl_account_metadata task and the crawl_account_posts
+    metadata add-on. Returns the metadata dict."""
+    meta = _fetch_account_metadata(crawler, mid)
+    report_bilibili_account_metadata_to_server(meta, task_id)
+    print(f"[bilibili_worker] account metadata mid={mid}: name={meta.get('name')!r} "
+          f"followers={meta.get('follower')} videos={meta.get('video_count')} "
+          f"total_views={meta.get('total_view')} likes={meta.get('like_num')}")
+    return meta
+
+
 # ----- task handlers -----
 def execute_crawl_account(crawler: BilibiliCrawler, params: dict) -> int:
     """Crawl a creator's uploaded videos, newest first, honoring max_num_posts
-    and min_create_time, reporting each page as it is fetched."""
+    and min_create_time, reporting each page as it is fetched. Then, unless
+    BILI_ACCOUNT_POSTS_FETCH_METADATA is off, also crawl + report the account's
+    metadata (best-effort; a failure does not discard the reported posts)."""
     task_id = params["task_id"]
     mid = _to_mid(params["creator_id"])
     max_num_posts = int(params.get("max_num_posts") or DEFAULT_MAX_NUM_POSTS)
@@ -300,6 +326,18 @@ def execute_crawl_account(crawler: BilibiliCrawler, params: dict) -> int:
         time.sleep(ACCOUNT_PAGE_SLEEP_SEC)
 
     print(f"[bilibili_worker] account mid={mid}: reported {reported} posts")
+
+    # Best-effort metadata enrichment. The posts above are already reported, so a
+    # metadata failure (e.g. missing/expired login cookies — the posts crawl is
+    # cookie-less, but metadata needs login) is logged and swallowed rather than
+    # failing the task and triggering a costly re-crawl of all the posts.
+    if ACCOUNT_POSTS_FETCH_METADATA:
+        try:
+            _fetch_and_report_account_metadata(crawler, mid, task_id)
+        except Exception as e:
+            print(f"[bilibili_worker] account mid={mid}: metadata fetch failed "
+                  f"({type(e).__name__}: {e}); posts were reported, continuing")
+
     return reported
 
 
@@ -314,12 +352,8 @@ def execute_crawl_account_metadata(crawler: BilibiliCrawler, params: dict) -> in
     reported = 0
     for cid in creator_ids:
         mid = _to_mid(cid)
-        meta = _fetch_account_metadata(crawler, mid)
-        report_bilibili_account_metadata_to_server(meta, task_id)
+        _fetch_and_report_account_metadata(crawler, mid, task_id)
         reported += 1
-        print(f"[bilibili_worker] account metadata mid={mid}: name={meta.get('name')!r} "
-              f"followers={meta.get('follower')} videos={meta.get('video_count')} "
-              f"total_views={meta.get('total_view')} likes={meta.get('like_num')}")
         time.sleep(ACCOUNT_PAGE_SLEEP_SEC)
 
     return reported
